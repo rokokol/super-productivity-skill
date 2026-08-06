@@ -1,0 +1,28 @@
+{
+  "name": "rokokol-skills",
+  "description": "Personal Claude Code skills",
+  "owner": {
+    "name": "rokokol",
+    "url": "https://github.com/rokokol"
+  },
+  "plugins": [
+    {
+      "name": "super-productivity",
+      "source": "./",
+      "description": "Manage Super Productivity tasks through its Local REST API — list, create, schedule, complete, and report tracked time",
+      "version": "0.1.0",
+      "author": {
+        "name": "rokokol"
+      },
+      "homepage": "https://github.com/rokokol/super-productivity-skill",
+      "license": "MIT",
+      "category": "productivity",
+      "keywords": [
+        "super-productivity",
+        "tasks",
+        "todo",
+        "time-tracking"
+      ]
+    }
+  ]
+}
