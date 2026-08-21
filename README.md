@@ -5,6 +5,7 @@ Lets an agent manage your [Super Productivity](https://super-productivity.com/) 
 ## Requirements
 
 - Super Productivity **desktop** 18+ with Settings → Misc → **Enable local REST API** (the API listens on `127.0.0.1:3876`, desktop only — not web, not mobile)
+- the access token from Settings → Misc → **Access Token** (see [Security](#security))
 - `bash`, `curl`, `jq`
 
 ## Install
@@ -64,7 +65,14 @@ Two more quirks worth knowing: `TODAY` is a due-date query rather than a real ta
 
 ## Security
 
-The API is unauthenticated on loopback in current builds, so any local process can read and change your tasks. Keep it bound to `127.0.0.1`. If your build issues a token, export `SP_TOKEN` and the script sends it as a bearer token. `SP_API` overrides the base URL
+Every request carries a bearer token, issued by the app under Settings → Misc → **Access Token**. The script reads it from `$SP_TOKEN`, and otherwise from `secrets/token` beside the script — that path is git-ignored, which keeps the secret out of the repository and out of your shell history:
+
+```bash
+mkdir -p secrets && chmod 700 secrets
+printf '%s\n' '<token>' > secrets/token && chmod 600 secrets/token
+```
+
+`SP_TOKEN_FILE` points somewhere else, `SP_API` overrides the base URL. A rejected or missing token exits 5 with the path to fix. The token grants full read and write access to your tasks, so treat it like a password and keep the API bound to `127.0.0.1`
 
 ## License
 

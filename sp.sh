@@ -3,13 +3,22 @@
 set -euo pipefail
 
 SP_API=${SP_API:-http://127.0.0.1:3876}
-SP_TOKEN=${SP_TOKEN:-}
 SP_TIMEOUT=${SP_TIMEOUT:-10}
+
+# The access token is a secret, so it lives in a git-ignored file next to this
+# script rather than in the repo or in shell history. The env var wins so one
+# call can hit another instance without touching the file.
+SP_TOKEN=${SP_TOKEN:-}
+SP_TOKEN_FILE=${SP_TOKEN_FILE:-"$(dirname "$(readlink -f "$0")")/secrets/token"}
+if [ -z "$SP_TOKEN" ] && [ -r "$SP_TOKEN_FILE" ]; then
+  SP_TOKEN=$(tr -d '[:space:]' <"$SP_TOKEN_FILE")
+fi
 
 E_USAGE=1
 E_CONN=2
 E_NAME=3
 E_API=4
+E_AUTH=5
 
 usage() {
   cat <<'EOF'
@@ -44,7 +53,10 @@ Options for add / set:
   --done | --undone      (set only)
   --json                 raw API payload instead of the one-line format
 
-Environment: SP_API (default http://127.0.0.1:3876), SP_TOKEN, SP_TIMEOUT
+Environment: SP_API (default http://127.0.0.1:3876), SP_TOKEN, SP_TOKEN_FILE
+(default secrets/token next to this script), SP_TIMEOUT
+
+The token comes from Settings -> Misc -> Access Token
 
 The API cannot create projects or tags, set up recurring tasks, or re-parent a
 subtask — do that in the app
@@ -104,6 +116,10 @@ start the desktop app and enable Settings -> Misc -> Enable local REST API" ;;
     die $E_API "HTTP $code: unexpected non-JSON response"
   fi
   if [ "$(jq -r '.ok' <<<"$json")" != "true" ]; then
+    if [ "$code" = 401 ]; then
+      die $E_AUTH "HTTP 401: the API rejected the token
+copy it from Settings -> Misc -> Access Token into $SP_TOKEN_FILE (chmod 600)"
+    fi
     die $E_API "$(jq -r '"\(.error.code // "ERROR"): \(.error.message // "request failed")"' <<<"$json")"
   fi
   jq -c '.data' <<<"$json"

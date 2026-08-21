@@ -1,6 +1,6 @@
 ---
 name: super-productivity
-description: "Manage Super Productivity tasks through its Local REST API — list, create, edit, schedule, complete, delete, run the timer, and report tracked time. Use whenever the user talks about their tasks, TODOs, planner, deadlines or time tracking. Russian triggers: задачи, задача, таск, тудушка, что у меня на сегодня, добавь задачу, поставь на завтра, отметь выполненной, закрой задачу, запусти таймер, сколько времени я потратил, статистика по задачам, супер продуктивити"
+description: "Manage Super Productivity tasks through its Local REST API — list, create, edit, schedule, complete, delete, run the timer, and report tracked time. Use whenever the user talks about their tasks, TODOs, planner, deadlines or time tracking. Russian triggers: задачи, задача, таск, тудушка, туду, что у меня на сегодня, добавь задачу, поставь на завтра, отметь выполненной, закрой задачу, запусти таймер, сколько времени я потратил, статистика по задачам, супер продуктивити"
 license: MIT
 ---
 
@@ -9,6 +9,17 @@ license: MIT
 Run everything through `sp.sh`, the script sitting next to this file. It is not on `PATH`, so resolve its full path once from the location this skill was read from, and reuse that for the session — the examples below write it as plain `sp.sh`
 
 `sp.sh help` prints the full flag reference — read it instead of guessing a flag
+
+## Access token
+
+The API authenticates every request with a bearer token from **Settings → Misc → Access Token**. `sp.sh` takes it from `$SP_TOKEN`, otherwise from `secrets/token` next to the script — a git-ignored file, so the secret never reaches the repository or the shell history:
+
+```bash
+mkdir -p secrets && chmod 700 secrets
+printf '%s\n' '<token>' > secrets/token && chmod 600 secrets/token
+```
+
+Never paste the token into a command line, a task title, or this file. On exit 5 the token is missing or stale — ask the user for a fresh one and write it to that file, do not fall back to running without it
 
 ## Common calls
 
@@ -45,12 +56,13 @@ sp.sh stats --by project ; sp.sh stats --by day --days 14
 
 ## Exit codes
 
-| | |
-|---|---|
-| 1 | bad usage — the message says which flag |
-| 2 | Super Productivity unreachable — tell the user to start it and enable Settings → Misc → Enable local REST API |
-| 3 | a project or tag name did not resolve — relay the candidates |
-| 4 | API error — relay `code: message` verbatim |
+|     |                                                                                                               |
+| --- | ------------------------------------------------------------------------------------------------------------- |
+| 1   | bad usage — the message says which flag                                                                       |
+| 2   | Super Productivity unreachable — tell the user to start it and enable Settings → Misc → Enable local REST API |
+| 3   | a project or tag name did not resolve — relay the candidates                                                  |
+| 4   | API error — relay `code: message` verbatim                                                                    |
+| 5   | the token is missing or rejected — see "Access token" above                                                   |
 
 ## Caveats
 
