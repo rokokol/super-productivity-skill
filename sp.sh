@@ -273,7 +273,7 @@ reject_today_tag() {
 }
 
 body_set() { BODY=$(jq -c --arg k "$1" --argjson v "$2" '.[$k] = $v' <<<"$BODY"); }
-json_str() { jq -Rc . <<<"$1"; }
+json_str() { jq -nc --arg s "$1" '$s'; }  # -R would split a multiline value into several JSON strings
 
 # every helper below is assigned on its own line: a die() inside $( ) exits only the
 # subshell, so its status has to reach set -e through a plain assignment
