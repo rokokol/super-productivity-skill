@@ -40,6 +40,8 @@ sp.sh stats --by project ; sp.sh stats --by day --days 14
 - Pass human names to `--project` and `--tag` — the script resolves them case-insensitively, ignores ё/е, and accepts a unique substring. Never invent an id
 - On exit 3 (unknown or ambiguous name) show the user the candidate list and ask — never pick one silently
 - The API cannot create projects or tags, define recurring tasks, or re-parent a subtask. Ask the user to do it in the app, do not fake it
+- **The backlog is out of reach.** It is a project-level list (`backlogTaskIds`, alongside `taskIds`), not a task field, and the API exposes no project write at all — `PATCH`/`PUT /projects/<id>` answer `NOT_FOUND`. Every `add` lands in `taskIds`, and `--due none` only clears the due date. When the user asks for the backlog, create the task and tell them it has to be dragged there in the app
+- **A `200` is not proof of a change.** Writes go through an allow-list of task fields, so a key that is not one of them is dropped and the call still answers `ok: true` — `PATCH /tasks/<id>` with `{"isBacklog":true}` returns success and moves nothing. That is the allow-list working as intended, not a bug (upstream #8732), so read the state back before reporting a change, and do not report it as a defect
 - `TODAY` is a due-date query, not a real tag: put a task on today with `--due today`
 - `--tag a,b` on `set` **replaces** every tag; use `+a` / `-b` to add or remove
 - Confirm with the user before `rm` — it is irreversible. Prefer `done` (reversible) or `archive`
