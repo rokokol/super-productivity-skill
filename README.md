@@ -1,6 +1,28 @@
+<div align="center">
+
 # Super Productivity skill
 
+**Your task list, driven from the agent's side of the desk (๑˃ᴗ˂)ﻭ**
+
+![Claude Code](https://img.shields.io/badge/Claude_Code-D97757?style=flat&logo=anthropic&logoColor=white)
+![Bash](https://img.shields.io/badge/Bash-4EAA25?style=flat&logo=gnubash&logoColor=white)
+![curl](https://img.shields.io/badge/curl-073551?style=flat&logo=curl&logoColor=white)
+![jq](https://img.shields.io/badge/jq-1E90FF?style=flat)
+[![license](https://img.shields.io/badge/MIT-3DA639?style=flat)](LICENSE)
+
+</div>
+
 Lets an agent manage your [Super Productivity](https://super-productivity.com/) tasks through the app's **Local REST API** — no MCP server, no plugin inside SP, no background process. One `SKILL.md` and one bash script over `curl` and `jq`
+
+Everything the agent does is a command you can run yourself, and every argument reads the way you would say it out loud: projects and tags by name, `--due tomorrow`, `--est 30m`. Where the API has no endpoint the skill refuses instead of improvising, which is the whole reason it can be trusted with a list you actually rely on
+
+## Contents
+
+- [Requirements](#requirements)
+- [Install](#install)
+- [What it does](#what-it-does)
+- [What it cannot do](#what-it-cannot-do)
+- [Security](#security)
 
 ## Requirements
 
@@ -30,6 +52,9 @@ git clone https://github.com/rokokol/super-productivity-skill \
   ~/.claude/skills/super-productivity
 ```
 
+> [!NOTE]
+> A skill has no version to pin — it is read at whatever revision you have checked out, so `git pull` is the whole upgrade path
+
 ## What it does
 
 | Command | |
@@ -52,6 +77,8 @@ The script is usable on its own:
 ./sp.sh stats --by day --days 14
 ```
 
+`./sp.sh help` prints the full flag reference, and `--json` turns any command into machine-readable output
+
 ## What it cannot do
 
 The REST API has no endpoint for these, so the skill refuses rather than pretending:
@@ -72,8 +99,7 @@ mkdir -p secrets && chmod 700 secrets
 printf '%s\n' '<token>' > secrets/token && chmod 600 secrets/token
 ```
 
-`SP_TOKEN_FILE` points somewhere else, `SP_API` overrides the base URL. A rejected or missing token exits 5 with the path to fix. The token grants full read and write access to your tasks, so treat it like a password and keep the API bound to `127.0.0.1`
+`SP_TOKEN_FILE` points somewhere else, `SP_API` overrides the base URL. A rejected or missing token exits 5 with the path to fix
 
-## License
-
-MIT
+> [!IMPORTANT]
+> The token grants full read and write access to your tasks, so treat it like a password and keep the API bound to `127.0.0.1`
