@@ -1,0 +1,36 @@
+name: ci
+
+# Nothing here talks to a mirror, a :latest image or a live site, so it is a gate
+# rather than a detector and pull requests run the whole of it
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: the ref to check out, so a bot can verify a branch with this very workflow
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: cachix/install-nix-action@v31
+      - name: CI tools come from the lock, not the registry
+        run: |
+          if grep -rEn 'nix (run|shell) nixpkgs#|npx +[a-z@.-]|pip +install |go +install .*@latest' .github/workflows; then
+            echo "unpinned registry lookup in a workflow — pin the tool in the flake's dev shell and use nix develop" >&2
+            exit 1
+          fi
+      - name: tests/check.sh (self-testing gate)
+        run: nix develop --no-write-lock-file -c ./tests/check.sh

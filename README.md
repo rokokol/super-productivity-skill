@@ -9,6 +9,7 @@
 ![curl](https://img.shields.io/badge/curl-073551?style=flat&logo=curl&logoColor=white)
 ![jq](https://img.shields.io/badge/jq-1E90FF?style=flat)
 [![license](https://img.shields.io/badge/MIT-3DA639?style=flat)](LICENSE)
+[![ci](https://github.com/rokokol/super-productivity-skill/actions/workflows/ci.yml/badge.svg)](https://github.com/rokokol/super-productivity-skill/actions/workflows/ci.yml)
 
 </div>
 
@@ -22,6 +23,7 @@ Everything the agent does is a command you can run yourself, and every argument 
 - [Install](#install)
 - [What it does](#what-it-does)
 - [What it cannot do](#what-it-cannot-do)
+- [Tests](#tests)
 - [Security](#security)
 
 ## Requirements
@@ -89,6 +91,14 @@ The REST API has no endpoint for these, so the skill refuses rather than pretend
 - notes as standalone entities, boards
 
 Two more quirks worth knowing: `TODAY` is a due-date query rather than a real tag, so a task goes on today's list via `--due today`; and archived tasks are hidden from a plain `list` — reach them with `--source archived` or `--all`, which is also what makes `stats` span finished days
+
+## Tests
+
+```bash
+nix develop -c ./tests/check.sh
+```
+
+Lints the scripts, checks that `SKILL.md` still carries the frontmatter an agent loads it by, and resolves every relative link and heading anchor in the docs — then proves each of those can go red against a known-bad fixture. The secret gate is exercised end to end in a throwaway repository: clean while scanning only its own source, then red on each planted key shape in turn
 
 ## Security
 
