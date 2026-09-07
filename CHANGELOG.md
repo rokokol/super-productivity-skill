@@ -10,6 +10,11 @@ Written after the fact from the repository's history, so the entries below say w
 
 - a private, git-ignored `user/` context for durable tool preferences and conventions associated with existing Super Productivity projects; the context is a cache of explicit user guidance rather than a copy of live API state
 - a CI guard that rejects every tracked path covered by `.gitignore`, including private files forced into the index with `git add -f`, with an end-to-end negative test proving the guard can fail
+- task-tree safety rules measured against the live API: plain output is not hierarchical, a done parent can be hidden while its open children remain visible, project moves cascade from parent to children, and complete audits must include done and archived tasks
+
+### Changed
+
+- `SKILL.md` now follows one operating flow from private context and live reads through safe writes and verification, with task semantics, API limits, commands, and diagnostics grouped by purpose instead of accumulated in one rules list
 
 ## 2026-09-04
 

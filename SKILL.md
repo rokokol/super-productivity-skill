@@ -6,88 +6,108 @@ license: MIT
 
 # Super Productivity
 
-Run everything through `sp.sh`, the script sitting next to this file. It is not on `PATH`, so resolve its full path once from the location this skill was read from, and reuse that for the session — the examples below write it as plain `sp.sh`
+Use `sp.sh` beside this file for every Super Productivity API operation. It is not on `PATH`: resolve its full path once from the loaded skill directory and reuse it for the session. The examples call that path `sp.sh`
 
-`sp.sh help` prints the full flag reference — read it instead of guessing a flag
+Run `sp.sh help` before using an unfamiliar command or flag. Do not guess the interface
 
-## Access token
+## Session setup
 
-The API authenticates every request with a bearer token from **Settings → Misc → Access Token**. `sp.sh` takes it from `$SP_TOKEN`, otherwise from `secrets/token` next to the script — a git-ignored file, so the secret never reaches the repository or the shell history:
+The Local REST API requires the bearer token from **Settings → Misc → Access Token**. `sp.sh` reads `$SP_TOKEN`, then falls back to the git-ignored `secrets/token` beside the script:
 
 ```bash
 mkdir -p secrets && chmod 700 secrets
 printf '%s\n' '<token>' > secrets/token && chmod 600 secrets/token
 ```
 
-Never paste the token into a command line, a task title, or this file. On exit 5 the token is missing or stale — ask the user for a fresh one and write it to that file, do not fall back to running without it
+Never place the token in a command line, task, note, example, or tracked file. Exit 5 means the token is missing or rejected: ask for a fresh token and write it to `secrets/token`; never retry unauthenticated
 
-## Private user context
+## Operating loop
 
-Keep durable, user-specific context in `user/` next to this file. The whole directory is git-ignored and must stay private:
+1. Read applicable private context
+2. Inspect live state with `list`, `get`, `projects`, or `tags`; read-only calls need no confirmation
+3. Resolve human project and tag names through `sp.sh`; never invent an id
+4. Perform the smallest requested mutation
+5. Read the changed state back before reporting success; an HTTP `200` alone proves nothing
+6. Update private context only when the user supplied a durable preference or convention
+
+For `set`, `done`, `archive`, `restore`, or `rm`, read the target first so its id and current state are known. Capture a newly created id with `add --json` and `.id`
+
+## Private context
+
+Keep durable user-specific guidance in the git-ignored `user/` directory:
 
 ```text
 user/
-├── preferences.md       preferences for working with Super Productivity
-└── projects/            one Markdown file per existing project
+├── preferences.md
+└── projects/
+    └── <local-name>.md
 ```
 
-- Read `user/preferences.md` before acting when it exists. A current request overrides a stored preference
-- For a request involving a project, read the matching file in `user/projects/` when it exists. Match by the exact project name written as the file's H1, not by filename alone
-- Store only durable preferences or project conventions the user states explicitly, such as what belongs in a project, its normal tags, estimation style, or scheduling policy. Update an existing note instead of duplicating it
-- Before creating a project note, confirm the project exists with `sp.sh projects`. Do not create notes for guessed project names
-- Treat this directory as a cache, not API state: never store tokens, ids, task snapshots, tracked-time statistics, or facts that can be read from the live API
-- Create `user/` and `user/projects/` lazily when there is something worth storing. Use one `# Exact project name` heading per project file; `preferences.md` is a short bullet list
-- Do not infer a durable convention from a single task request. If it is unclear whether the user wants a rule remembered, ask
+- `preferences.md` is a short bullet list of preferences for working with the tool
+- Each project file starts with `# Exact project name`; match that heading rather than trusting its filename
+- Read preferences before acting and the relevant project file before project-specific work
+- The current request overrides cached guidance; live API state overrides stale cached facts
+- Store explicit, durable preferences and conventions such as project boundaries, normal tags, estimation style, or scheduling policy. Do not infer a rule from one task
+- Update an existing note instead of duplicating it. Create directories and files lazily
+- Confirm a project exists with `sp.sh projects` before creating its note
+- Never cache tokens, ids, task snapshots, statistics, or any fact available from the live API
 
-## Common calls
+## Task model
+
+- A task belongs to one project and may have several tags
+- Pass project and tag names, not ids. Resolution is case-insensitive, folds Cyrillic ё/е, and accepts a unique substring
+- Exit 3 means a name is unknown or ambiguous: show the candidates and ask rather than selecting silently
+- `TODAY` is a due-date query, not a real tag. Use `--due today`
+- `--tag a,b` on `set` replaces the complete tag set. Use `+a` and `-b` to merge
+- The plain display is flat, not hierarchical. A `sub` line is not guaranteed to belong to the nearest parent; use JSON `parentId` and `subTaskIds`
+- An open subtask can outlive a done parent. If a listed task has `parentId`, fetch its parent before reorganizing the tree
+- A complete audit requires `list --all --source all --json`; ordinary `list` omits done and archived tasks
+
+## Safe writes
+
+- Every write goes through an API allow-list. Unsupported fields can be discarded while the API still returns `ok: true`, so read back the exact fields that should have changed
+- Moving a parent to another project cascades to its subtasks. Inspect the complete tree first, then verify the `projectId` of the parent and every child
+- Prefer `done` or `archive` over deletion. Confirm `rm` with the user because it is irreversible
+- Estimate executable leaf tasks in a decomposed task. `stats` omits parent estimates and counts leaf time only, so adding parent and child estimates double-counts the plan
+
+## API limits
+
+The API cannot create projects or tags, define recurring tasks, or re-parent a subtask. Ask the user to perform those actions in the app; do not simulate success
+
+The backlog is a project-level `backlogTaskIds` list, not a task field, and the API exposes no project write. Every `add` lands in `taskIds`; `--due none` only clears the date. When asked to create a backlog task, create it normally and tell the user to drag it into the backlog in the app
+
+Do not send guessed raw fields. For example, `PATCH /tasks/<id>` with `{"isBacklog":true}` returns success but changes nothing because the field is outside the allow-list; this is expected behavior, not an upstream defect
+
+## Commands
 
 ```bash
-sp.sh list --today                          # what is due today
-sp.sh list --project notes                  # one project
-sp.sh list --query docker --all             # search everywhere, done included
+sp.sh list --today
+sp.sh list --project notes
+sp.sh list --query docker --all
 sp.sh add "Buy bread" --due tomorrow --tag home --est 30m
 sp.sh add "Finish the chapter" --project notes --at "2026-08-07 09:00"
-sp.sh set <id> --due +3d --tag +urgent      # reschedule and add one tag
-sp.sh done <id>                             # or several ids at once
-sp.sh start <id> ; sp.sh stop               # timer
-sp.sh stats --by project ; sp.sh stats --by day --days 14
+sp.sh set <id> --due +3d --tag +urgent
+sp.sh done <id>
+sp.sh start <id>
+sp.sh stop
+sp.sh stats --by project
+sp.sh stats --by day --days 14
 ```
 
-## Rules
+`stats` reads live and archived API data, never backup files. It counts leaf tasks only, which avoids counting a parent's aggregate time again
 
-- Pass human names to `--project` and `--tag` — the script resolves them case-insensitively, ignores ё/е, and accepts a unique substring. Never invent an id
-- On exit 3 (unknown or ambiguous name) show the user the candidate list and ask — never pick one silently
-- The API cannot create projects or tags, define recurring tasks, or re-parent a subtask. Ask the user to do it in the app, do not fake it
-- **The backlog is out of reach.** It is a project-level list (`backlogTaskIds`, alongside `taskIds`), not a task field, and the API exposes no project write at all — `PATCH`/`PUT /projects/<id>` answer `NOT_FOUND`. Every `add` lands in `taskIds`, and `--due none` only clears the due date. When the user asks for the backlog, create the task and tell them it has to be dragged there in the app
-- **A `200` is not proof of a change.** Writes go through an allow-list of task fields, so a key that is not one of them is dropped and the call still answers `ok: true` — `PATCH /tasks/<id>` with `{"isBacklog":true}` returns success and moves nothing. That is the allow-list working as intended, not a bug (upstream #8732), so read the state back before reporting a change, and do not report it as a defect
-- `TODAY` is a due-date query, not a real tag: put a task on today with `--due today`
-- `--tag a,b` on `set` **replaces** every tag; use `+a` / `-b` to add or remove
-- Confirm with the user before `rm` — it is irreversible. Prefer `done` (reversible) or `archive`
-- To capture a new task's id, use `--json` and read `.id`
-- Read-only commands are free; run `list` before `set`/`rm` so the id is real
-- When cached context and the live API disagree, trust the API and correct or remove the stale cache entry
+## Output and errors
 
-## Output
-
-```
+```text
 - <id>  <title>  @project  #tag  ~due  [spent/estimate]  (+subtasks)
 ```
 
-`-` open, `x` done, `sub` marks a subtask, `@project` is omitted for the inbox. Add `--json` for the raw payload
+`-` is open, `x` is done, and `sub` marks a subtask. `@project` is omitted for Inbox. Use `--json` whenever structure or exact fields matter
 
-## Exit codes
-
-|     |                                                                                                               |
-| --- | ------------------------------------------------------------------------------------------------------------- |
-| 1   | bad usage — the message says which flag                                                                       |
-| 2   | Super Productivity unreachable — tell the user to start it and enable Settings → Misc → Enable local REST API |
-| 3   | a project or tag name did not resolve — relay the candidates                                                  |
-| 4   | API error — relay `code: message` verbatim                                                                    |
-| 5   | the token is missing or rejected — see "Access token" above                                                   |
-
-## Caveats
-
-- `stats` is computed from the live API, not from the app's backup dumps — nothing on disk is read
-- it counts leaf tasks only: a parent task stores the sum of its subtasks time, so counting both would double it
-- it spans the archive too: `--source all` returns live plus archived tasks, so finishing a day does not erase history from the report
-- plain `list` shows only what is not archived; reach archived work with `--source archived` or `--all`
+| Code | Meaning and response |
+| ---: | --- |
+| 1 | Bad usage: follow the command's diagnostic |
+| 2 | App unreachable: ask the user to start the desktop app and enable **Settings → Misc → Enable local REST API** |
+| 3 | Project or tag unresolved: relay the candidates and ask |
+| 4 | API error: relay `code: message` verbatim |
+| 5 | Token missing or rejected: replace `secrets/token` as described above |
