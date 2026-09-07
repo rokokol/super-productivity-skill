@@ -21,6 +21,24 @@ printf '%s\n' '<token>' > secrets/token && chmod 600 secrets/token
 
 Never paste the token into a command line, a task title, or this file. On exit 5 the token is missing or stale — ask the user for a fresh one and write it to that file, do not fall back to running without it
 
+## Private user context
+
+Keep durable, user-specific context in `user/` next to this file. The whole directory is git-ignored and must stay private:
+
+```text
+user/
+├── preferences.md       preferences for working with Super Productivity
+└── projects/            one Markdown file per existing project
+```
+
+- Read `user/preferences.md` before acting when it exists. A current request overrides a stored preference
+- For a request involving a project, read the matching file in `user/projects/` when it exists. Match by the exact project name written as the file's H1, not by filename alone
+- Store only durable preferences or project conventions the user states explicitly, such as what belongs in a project, its normal tags, estimation style, or scheduling policy. Update an existing note instead of duplicating it
+- Before creating a project note, confirm the project exists with `sp.sh projects`. Do not create notes for guessed project names
+- Treat this directory as a cache, not API state: never store tokens, ids, task snapshots, tracked-time statistics, or facts that can be read from the live API
+- Create `user/` and `user/projects/` lazily when there is something worth storing. Use one `# Exact project name` heading per project file; `preferences.md` is a short bullet list
+- Do not infer a durable convention from a single task request. If it is unclear whether the user wants a rule remembered, ask
+
 ## Common calls
 
 ```bash
@@ -47,6 +65,7 @@ sp.sh stats --by project ; sp.sh stats --by day --days 14
 - Confirm with the user before `rm` — it is irreversible. Prefer `done` (reversible) or `archive`
 - To capture a new task's id, use `--json` and read `.id`
 - Read-only commands are free; run `list` before `set`/`rm` so the id is real
+- When cached context and the live API disagree, trust the API and correct or remove the stale cache entry
 
 ## Output
 

@@ -4,6 +4,13 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 Written after the fact from the repository's history, so the entries below say what each change did rather than reproducing the reasoning; the commit bodies carry that
 
+## 2026-09-07
+
+### Added
+
+- a private, git-ignored `user/` context for durable tool preferences and conventions associated with existing Super Productivity projects; the context is a cache of explicit user guidance rather than a copy of live API state
+- a CI guard that rejects every tracked path covered by `.gitignore`, including private files forced into the index with `git add -f`, with an end-to-end negative test proving the guard can fail
+
 ## 2026-09-04
 
 ### Added

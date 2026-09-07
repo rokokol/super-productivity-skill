@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Refuse to ship a secret that slipped past .gitignore.
 #
-# .gitignore keeps secrets/ out of the repository; this keeps a value out of a
-# file that belongs here — a token pasted into a doc, an example or a default is
-# the leak that actually happens.
+# .gitignore keeps private paths out of the repository; this also keeps a value
+# out of a file that belongs here — a token pasted into a doc, an example or a
+# default is the leak that actually happens.
 #
 # Every pattern is written so it cannot match its own source line: a literal
 # prefix is always followed by a bracket expression the pattern text itself does
@@ -20,22 +20,23 @@ report() {
 }
 
 mapfile -t tracked < <(git ls-files)
-[ ${#tracked[@]} -gt 0 ] || {
+[[ ${#tracked[@]} -gt 0 ]] || {
   echo "secret-gate: nothing tracked yet" >&2
   exit 0
 }
+
+# --no-index makes check-ignore inspect tracked paths too; without it, Git skips
+# the exact git add -f leak this gate must catch. NUL delimiters preserve every path
+mapfile -d '' ignored < <(git ls-files -z | git check-ignore --no-index -z --stdin || true)
+for path in "${ignored[@]}"; do
+  report "tracked path is covered by .gitignore: $path"
+done
 
 scan() { # scan DESCRIPTION ERE
   if git grep -nIE "$2" -- "${tracked[@]}" >&2; then
     report "$1"
   fi
 }
-
-# The token lives in secrets/, which is git-ignored — a tracked file under that
-# path means the ignore was bypassed with git add -f
-if git ls-files --error-unmatch secrets >/dev/null 2>&1; then
-  report "something under secrets/ is tracked"
-fi
 
 scan "private key material" \
   'BEGIN ([A-Z]+ )*PRIVATE KEY'

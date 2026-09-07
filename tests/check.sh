@@ -57,6 +57,28 @@ fi
 echo "== the secret gate is quiet on this repository"
 ./tests/no-secrets.sh
 
+echo "== the secret gate rejects a tracked path covered by .gitignore"
+ignored=$(mktemp -d)
+git -C "$ignored" init -q
+git -C "$ignored" config user.email ci@example.invalid
+git -C "$ignored" config user.name ci
+mkdir -p "$ignored/tests" "$ignored/user"
+cp tests/no-secrets.sh "$ignored/tests/"
+printf 'user/\n' >"$ignored/.gitignore"
+printf 'private preference\n' >"$ignored/user/preferences.md"
+git -C "$ignored" add .gitignore tests/no-secrets.sh
+git -C "$ignored" add -f user/preferences.md
+if out=$(cd "$ignored" && ./tests/no-secrets.sh 2>&1); then
+  rm -rf "$ignored"
+  fail "the secret gate allowed an ignored path added with git add -f"
+fi
+if ! printf '%s\n' "$out" | grep -qxF "secret-gate: tracked path is covered by .gitignore: user/preferences.md"; then
+  printf '%s\n' "$out" >&2
+  rm -rf "$ignored"
+  fail "the secret gate rejected an ignored tracked path without naming it"
+fi
+rm -rf "$ignored"
+
 echo "== the secret gate catches every shape it claims"
 # Exercised in a throwaway repository rather than by re-testing its regexes here:
 # the gate's subject is "what git tracks", and only a real repository answers that
@@ -68,8 +90,8 @@ git -C "$work" config user.name ci
 mkdir -p "$work/tests"
 cp tests/no-secrets.sh "$work/tests/"
 git -C "$work" add -A
-# Clean first: the gate is now scanning its own source, so a pattern matching its
-# own text would surface right here
+# Clean first, with no .gitignore: the gate is now scanning its own source, so a
+# pattern matching its own text would surface right here
 (cd "$work" && ./tests/no-secrets.sh >/dev/null 2>&1) ||
   fail "the secret gate reddens on its own source — a pattern is matching its own text"
 # Then one planted value per shape, each alone, so one over-broad pattern cannot

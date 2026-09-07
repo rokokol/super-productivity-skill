@@ -23,6 +23,7 @@ Everything the agent does is a command you can run yourself, and every argument 
 - [Install](#install)
 - [What it does](#what-it-does)
 - [What it cannot do](#what-it-cannot-do)
+- [Private context](#private-context)
 - [Tests](#tests)
 - [Security](#security)
 
@@ -92,13 +93,17 @@ The REST API has no endpoint for these, so the skill refuses rather than pretend
 
 Two more quirks worth knowing: `TODAY` is a due-date query rather than a real tag, so a task goes on today's list via `--due today`; and archived tasks are hidden from a plain `list` — reach them with `--source archived` or `--all`, which is also what makes `stats` span finished days
 
+## Private context
+
+The skill can keep durable personal conventions in the git-ignored `user/` directory beside `SKILL.md`: `preferences.md` describes how you prefer to work with the tool, while `projects/*.md` records what belongs in existing projects, their usual tags, estimation style, or scheduling policy. These notes are a local cache rather than API state, so they never contain tokens, ids, task snapshots, or statistics, and live API data always wins when a note becomes stale
+
 ## Tests
 
 ```bash
 nix develop -c ./tests/check.sh
 ```
 
-Lints the scripts, checks that `SKILL.md` still carries the frontmatter an agent loads it by, and resolves every relative link and heading anchor in the docs — then proves each of those can go red against a known-bad fixture. The secret gate is exercised end to end in a throwaway repository: clean while scanning only its own source, then red on each planted key shape in turn
+Lints the scripts, checks that `SKILL.md` still carries the frontmatter an agent loads it by, and resolves every relative link and heading anchor in the docs — then proves each of those can go red against a known-bad fixture. The secret gate is exercised end to end in throwaway repositories: red on a git-ignored path forced into the index, then red on each planted key shape in turn
 
 ## Security
 
