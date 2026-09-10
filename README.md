@@ -93,7 +93,7 @@ Lints every bash script in the repository, found by its shebang rather than by a
 Every request carries a bearer token, issued by the app under Settings → Misc → **Access Token**. The script reads it from `$SP_TOKEN`, and otherwise from `secrets/token` in the private directory above — git-ignored when that is the skill's own directory, outside any repository when it is the XDG one. Run this from the skill's directory; the value is typed at a prompt that does not echo, so it stays out of your shell history too:
 
 ```bash
-read -rs t && d=$(./sp.sh home)/secrets && mkdir -p "$d" && chmod 700 "$d" && (umask 077 && printf '%s\n' "$t" >"$d/token") && unset t
+read -rs t && [ -n "$t" ] && d=$(./sp.sh home)/secrets && mkdir -p "$d" && chmod 700 "$d" && (umask 077 && printf '%s\n' "$t" >"$d/token") && unset t
 ```
 
 To keep the token in a clone you sync, run `mkdir secrets` in it first, so `sp.sh home` picks the clone

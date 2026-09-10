@@ -17,7 +17,7 @@ The Local REST API requires the bearer token from **Settings → Misc → Access
 The token never passes through the agent. Ask the user to run this in their own terminal, with the resolved path of `sp.sh` in place of `SP`. It reads the token without echoing it, so the value lands in neither a command line nor a transcript:
 
 ```bash
-read -rs t && d=$(SP home)/secrets && mkdir -p "$d" && chmod 700 "$d" && (umask 077 && printf '%s\n' "$t" >"$d/token") && unset t
+read -rs t && [ -n "$t" ] && d=$(SP home)/secrets && mkdir -p "$d" && chmod 700 "$d" && (umask 077 && printf '%s\n' "$t" >"$d/token") && unset t
 ```
 
 Never place the token in a command line, task, note, example, or tracked file, and never ask for it in the conversation. Exit 5 means the token is missing or rejected: ask the user to run the command above with a fresh one; never retry unauthenticated
