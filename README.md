@@ -4,7 +4,7 @@
 
 **Your task list, driven from the agent's side of the desk (๑˃ᴗ˂)ﻭ**
 
-![Claude Code](https://img.shields.io/badge/Claude_Code-D97757?style=flat&logo=anthropic&logoColor=white)
+[![Agent Skill](https://img.shields.io/badge/Agent_Skill-6E56CF?style=flat)](https://agentskills.io)
 ![Bash](https://img.shields.io/badge/Bash-4EAA25?style=flat&logo=gnubash&logoColor=white)
 ![curl](https://img.shields.io/badge/curl-073551?style=flat&logo=curl&logoColor=white)
 ![jq](https://img.shields.io/badge/jq-1E90FF?style=flat)
