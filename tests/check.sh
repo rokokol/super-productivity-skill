@@ -142,13 +142,19 @@ if [ "$mode" != behaviour ]; then
   done
   rm -rf "$planted"
 
-  echo "== every relative link in the docs resolves"
-  ./tests/check-links.sh "${docs[@]}"
+  echo "== the vendored checkers are byte-equal to their source"
+  # check-skill.sh and check-pins.sh come from the ci skill: every copy must still be the
+  # blob .github/vendor.lock records, so one edited here instead of at its source fails by name
+  ./vendor-sync.sh check
 
-  echo "== the link checker is able to fail"
-  if ./tests/check-links.sh tests/fixtures/broken-links.md >/dev/null 2>&1; then
-    fail "tests/fixtures/broken-links.md passed the link checker — it cannot catch anything"
-  fi
+  echo "== the workflows take no tool from a registry"
+  # The ci skill's pin guard, which proves on every run that it catches each unpinned shape
+  ./check-pins.sh
+
+  echo "== SKILL.md loads, every reference is reachable, and every link and anchor resolves"
+  # The one gate every skill repository shares, each check proven able to fail on a planted
+  # copy on every run
+  ./check-skill.sh -n super-productivity .
 
   echo "== the secret gate is quiet on this repository"
   ./tests/no-secrets.sh

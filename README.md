@@ -9,7 +9,7 @@
 ![curl](https://img.shields.io/badge/curl-073551?style=flat&logo=curl&logoColor=white)
 ![jq](https://img.shields.io/badge/jq-1E90FF?style=flat)
 [![license](https://img.shields.io/badge/MIT-3DA639?style=flat)](LICENSE)
-[![ci](https://github.com/rokokol/super-productivity-skill/actions/workflows/ci.yml/badge.svg)](https://github.com/rokokol/super-productivity-skill/actions/workflows/ci.yml)
+[![ci](https://github.com/rokokol/super-productivity-skill/actions/workflows/build.yml/badge.svg)](https://github.com/rokokol/super-productivity-skill/actions/workflows/build.yml)
 
 </div>
 
