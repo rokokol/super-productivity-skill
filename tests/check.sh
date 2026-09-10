@@ -84,37 +84,9 @@ if [ "$mode" != behaviour ]; then
   fi
   rm -rf "$bad"
 
-  echo "== SKILL.md carries the frontmatter an agent loads it by"
-  frontmatter_problem() { # frontmatter_problem FILE — prints what is wrong, nothing if sound
-    local front key
-    [ "$(head -n1 -- "$1")" = --- ] || {
-      echo "does not open with a frontmatter block"
-      return
-    }
-    front=$(sed -n '2,/^---$/p' "$1")
-    for key in name description license; do
-      grep -q "^$key:" <<<"$front" || {
-        echo "frontmatter has no $key"
-        return
-      }
-    done
-    grep -qx 'name: super-productivity' <<<"$front" ||
-      echo "the skill's name is not what the plugin manifest and the readme call it"
-  }
-  why=$(frontmatter_problem SKILL.md)
-  [ -z "$why" ] || fail "SKILL.md $why"
-
-  echo "== the frontmatter check is able to fail"
+  # SKILL.md's frontmatter is the vendored check-skill.sh's to judge, further down, with its
+  # own planted copies; what is left here is the manifest, which has to agree with it
   planted=$(mktemp -d)
-  sed '1d' SKILL.md >"$planted/no-opener.md"
-  grep -v '^description:' SKILL.md >"$planted/no-description.md"
-  sed 's/^name: .*/name: something-else/' SKILL.md >"$planted/wrong-name.md"
-  for f in "$planted"/*.md; do
-    [ -n "$(frontmatter_problem "$f")" ] || {
-      rm -rf "$planted"
-      fail "the frontmatter check passed a copy of SKILL.md planted with ${f##*/}"
-    }
-  done
 
   echo "== the plugin manifest describes the skill as SKILL.md does, and pins no version"
   # The manifest's description cannot reference SKILL.md's, so it is held to be the

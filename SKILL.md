@@ -63,7 +63,7 @@ user/
 - The plain display is flat, not hierarchical. A `sub` line is not guaranteed to belong to the nearest parent; use JSON `parentId` and `subTaskIds`
 - An open subtask can outlive a done parent. If a listed task has `parentId`, fetch its parent before reorganizing the tree
 - A complete audit requires `list --all --source all --json`; ordinary `list` omits done and archived tasks
-- A parent's `timeEstimate` is derived, not kept: the app overwrites it with the sum of its subtasks' remaining estimates whenever a subtask's estimate or done state changes or a subtask is deleted. Estimate the subtasks of a decomposed task, never the parent as well; an estimate written to the parent lasts only until the next such change, and `stats` counts leaf time only
+- A parent's `timeEstimate` is derived, not kept: the app overwrites it with the sum of its subtasks' remaining estimates whenever a subtask's estimate or done state changes or a subtask is deleted. Estimate the subtasks of a decomposed task, never the parent as well; an estimate written to the parent lasts only until the next such change
 - Deleting a parent's last subtask copies that subtask's time spent and estimate onto the parent. When flattening a tree, delete the subtask that carries tracked time last, or that time leaves `stats`
 - Notes are markdown. Since Super Productivity 18.10 `- [ ]` and `- [x]` lines render as a clickable checklist with a done/total badge on the task, provided the note has at least two of them or nothing else; through the API they stay plain text in `notes`
 
@@ -111,7 +111,7 @@ A task id can open with `-`, since `-` is in the alphabet ids are drawn from. Pa
 
 | Code | Meaning and response |
 | ---: | --- |
-| 1 | Bad usage, an `SP_API` curl cannot use included: follow the command's diagnostic |
+| 1 | Bad usage, including an `SP_API` curl cannot use: follow the command's diagnostic |
 | 2 | App unreachable: ask the user to start the desktop app and enable **Settings → Misc → Enable local REST API** |
 | 3 | Project or tag unresolved: relay the candidates and ask |
 | 4 | API error: relay `code: message` verbatim |
