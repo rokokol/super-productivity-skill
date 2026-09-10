@@ -6,6 +6,11 @@ Written after the fact from the repository's history, so the entries below say w
 
 ## 2026-09-10
 
+### Added
+
+- a `macos` job in CI that runs the behaviour half of `tests/check.sh` on a macOS runner, under the `/bin/bash` 3.2 and the BSD `date` that system ships, with `jq` from the image, printing each one's version first. It gates pull requests: what turns it red is nearly always a change that uses something only GNU or bash 4 has. `tests/check.sh` takes `lint`, `behaviour` or `all`, and works its expected dates out on whichever `date` the machine has, since the test's own arithmetic had used GNU's `-d`
+- the fake BSD `date` behind the Linux half now takes a time field the value leaves out from the current time, as BSD `date` does, instead of zero; the expectations' BSD branch is held to the GNU one through it
+
 ### Fixed
 
 - the private `user/` context is placed beside `sp.sh` explicitly, not in whatever directory the session happens to be in

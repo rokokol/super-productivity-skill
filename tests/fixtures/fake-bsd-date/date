@@ -4,7 +4,9 @@
 # — and translates what BSD date has — -v day adjustments, -j -f parsing — into calls to
 # the real GNU date named by $REAL_DATE. Like BSD date it is lenient about the day of the
 # month: 2026-02-30 rolls over into March rather than failing, so a caller that wants to
-# refuse an impossible date has to notice the value changed
+# refuse an impossible date has to notice the value changed. And like BSD date, -j -f takes
+# every time field the value leaves out from the current time, seconds included, so a
+# caller that parses "10:00" without its ":00" gets whatever second it is now
 set -euo pipefail
 : "${REAL_DATE:?REAL_DATE must name the real date binary}"
 
@@ -32,7 +34,8 @@ while [ $# -gt 0 ]; do
         echo "date: Failed conversion of \`\`$3'' using format \`\`$2''" >&2
         exit 1
       }
-      time="${BASH_REMATCH[5]:-00}:${BASH_REMATCH[6]:-00}:${BASH_REMATCH[8]:-00}"
+      # A field the value leaves out is the current one, as BSD date has it — not zero
+      time="${BASH_REMATCH[5]:-$("$REAL_DATE" +%H)}:${BASH_REMATCH[6]:-$("$REAL_DATE" +%M)}:${BASH_REMATCH[8]:-$("$REAL_DATE" +%S)}"
       # The day first, on its own: GNU date reads a signed number right after a time as a
       # zone offset, so "10:00:00 +28 days" would not mean what it says
       day=$("$REAL_DATE" -d "${BASH_REMATCH[1]}-${BASH_REMATCH[2]}-01 +$((10#${BASH_REMATCH[3]} - 1)) days" +%F)

@@ -34,3 +34,23 @@ jobs:
           fi
       - name: tests/check.sh (self-testing gate)
         run: nix develop --no-write-lock-file -c ./tests/check.sh
+
+  # A platform job, and so a gate: what turns it red is nearly always the change itself —
+  # a GNU-only date flag, a construct bash 3.2 rejects — and the versions printed first
+  # name the rare red an image update causes. bash and date are the system's own; jq comes
+  # from the image, which the ci skill allows because sp.sh declares it as a dependency
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - name: the platform this job stands for
+        run: |
+          /bin/bash --version | head -n 1
+          ls -l "$(command -v date)"
+          if date --version >/dev/null 2>&1; then echo "date is GNU here, so this job proves nothing about macOS" >&2; exit 1; fi
+          jq --version
+      - name: the behaviour half under the bash and date macOS ships
+        run: /bin/bash ./tests/check.sh behaviour
