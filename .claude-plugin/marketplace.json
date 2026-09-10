@@ -9,8 +9,7 @@
     {
       "name": "super-productivity",
       "source": "./",
-      "description": "Manage Super Productivity tasks through its Local REST API — list, create, schedule, complete, and report tracked time",
-      "version": "0.1.0",
+      "description": "Manage Super Productivity tasks through its Local REST API — list, create, edit, schedule, complete, delete, run the timer, and report tracked time",
       "author": {
         "name": "rokokol"
       },

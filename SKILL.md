@@ -1,6 +1,6 @@
 ---
 name: super-productivity
-description: "Manage Super Productivity tasks through its Local REST API — list, create, edit, schedule, complete, delete, run the timer, and report tracked time. Use whenever the user talks about their tasks, TODOs, planner, deadlines or time tracking. Russian triggers: задачи, задача, таск, тудушка, туду, что у меня на сегодня, добавь задачу, поставь на завтра, отметь выполненной, закрой задачу, запусти таймер, сколько времени я потратил, статистика по задачам, супер продуктивити"
+description: "Manage Super Productivity tasks through its Local REST API — list, create, edit, schedule, complete, delete, run the timer, and report tracked time. Use when the user means their own task list in Super Productivity rather than the agent's checklist for the current session: adding a task, rescheduling it or setting a deadline, subtasks, estimates, projects and tags, the backlog, archiving, starting or stopping the timer, or where the time went. Russian triggers: супер продуктивити, запиши в задачи, закинь в тудушку, добавь задачу, что у меня на сегодня, что у меня на завтра, что по планам на неделю, поставь на завтра, перенеси на пятницу, сдвинь дедлайн, разбей на подзадачи, это на полчаса, отметь выполненной, закрой задачу, убери в архив, закинь в бэклог, запусти таймер, останови таймер, сколько я сегодня наработал, сколько времени ушло на"
 license: MIT
 ---
 
@@ -12,12 +12,12 @@ Run `sp.sh help` before using an unfamiliar command or flag. Do not guess the in
 
 ## Session setup
 
-The Local REST API requires the bearer token from **Settings → Misc → Access Token**. `sp.sh` reads `$SP_TOKEN`, then falls back to the git-ignored `secrets/token` beside the script — beside `sp.sh`, not in whatever directory the session happens to be in, where no `.gitignore` covers it
+The Local REST API requires the bearer token from **Settings → Misc → Access Token**. `sp.sh` reads `$SP_TOKEN`, then the `token` file in the private directory that `sp.sh home` prints — `$XDG_CONFIG_HOME/super-productivity-skill` by default, outside the skill, because a plugin or `npx skills` update replaces the skill's directory whole. An older `secrets/token` beside `sp.sh` is still read when the private directory has none
 
-The token never passes through the agent. Ask the user to run this in their own terminal, with the directory of the resolved `sp.sh` in place of `DIR`. It reads the token without echoing it, so the value lands in neither a command line nor a transcript:
+The token never passes through the agent. Ask the user to run this in their own terminal, with the resolved path of `sp.sh` in place of `SP`. It reads the token without echoing it, so the value lands in neither a command line nor a transcript:
 
 ```bash
-read -rs t && mkdir -p "DIR/secrets" && chmod 700 "DIR/secrets" && (umask 077 && printf '%s\n' "$t" >"DIR/secrets/token") && unset t
+read -rs t && d=$(SP home) && mkdir -p "$d" && chmod 700 "$d" && (umask 077 && printf '%s\n' "$t" >"$d/token") && unset t
 ```
 
 Never place the token in a command line, task, note, example, or tracked file, and never ask for it in the conversation. Exit 5 means the token is missing or rejected: ask the user to run the command above with a fresh one; never retry unauthenticated
@@ -35,7 +35,7 @@ For `set`, `done`, `archive`, `restore`, or `rm`, read the target first so its i
 
 ## Private context
 
-Keep durable user-specific guidance in the git-ignored `user/` directory beside `sp.sh` — never in the current directory, where it would land in someone else's repository:
+Keep durable user-specific guidance in `user/` inside the private directory `sp.sh home` prints — never beside `sp.sh`, which an update replaces, and never in the current directory, where it would land in someone else's repository. When that `user/` does not exist but an older one sits beside `sp.sh`, read the old one and offer the user to move it:
 
 ```text
 user/
@@ -73,7 +73,7 @@ user/
 
 ## API limits
 
-The API cannot create projects or tags, define recurring tasks, or re-parent a subtask. Ask the user to perform those actions in the app; do not simulate success
+This is the one list of what the API cannot do; `sp.sh help` and the readme point here. The API cannot create or rename projects and tags, define recurring tasks, re-parent a subtask, or reach standalone notes and boards. Ask the user to perform those actions in the app; do not simulate success
 
 The backlog is a project-level `backlogTaskIds` list, not a task field, and the API exposes no project write. Every `add` lands in `taskIds`; `--due none` only clears the date. When asked to create a backlog task, create it normally and tell the user to drag it into the backlog in the app
 
@@ -107,8 +107,9 @@ sp.sh stats --by day --days 14
 
 | Code | Meaning and response |
 | ---: | --- |
-| 1 | Bad usage: follow the command's diagnostic |
+| 1 | Bad usage, an `SP_API` curl cannot use included: follow the command's diagnostic |
 | 2 | App unreachable: ask the user to start the desktop app and enable **Settings → Misc → Enable local REST API** |
 | 3 | Project or tag unresolved: relay the candidates and ask |
 | 4 | API error: relay `code: message` verbatim |
 | 5 | Token missing or rejected: ask the user to write a fresh one with the command in Session setup |
+| 6 | Data of an unexpected shape, or a bug in `sp.sh`: relay the message and stop rather than retrying with guessed arguments |

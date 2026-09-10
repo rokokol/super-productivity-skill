@@ -1,6 +1,6 @@
 # Changelog
 
-Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dated rather than numbered, and with no `Unreleased` section — a skill is read at whatever revision you have checked out, so whatever is on the default branch is what every reader already has, and a section for work that has landed but not shipped would never close. The rule lives in the [ci](https://github.com/rokokol/ci-skill) skill, which owns what has no version
+Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dated rather than numbered, and with no `Unreleased` section — a skill is read at whatever revision you have checked out, so whatever is on the default branch is what every reader already has, and a section for work that has landed but not shipped would never close. The rule lives in the [versioning](https://github.com/rokokol/versioning-skill) skill, which owns what has no version
 
 Written after the fact from the repository's history, so the entries below say what each change did rather than reproducing the reasoning; the commit bodies carry that
 
@@ -9,6 +9,20 @@ Written after the fact from the repository's history, so the entries below say w
 ### Fixed
 
 - the private `user/` context is placed beside `sp.sh` explicitly, not in whatever directory the session happens to be in
+- **`set <id> --tag foo-bar` was a silent no-op.** A hyphen anywhere in the value switched `set` into merge mode, where only items starting with `+` or `-` count, so the task's current tags were sent back unchanged. Only an item's first character decides its role now, and a value mixing both forms is refused
+- `stats --by project` and `--by tag` ignored `--days`; with it they now count only the time spent inside that window
+- `--days 7` covered eight days
+- exit codes that meant something else: a failing jq surfaced as 3 ("name unresolved") or 5 ("token rejected") and now exits 6; `list --limit abc` and a malformed `--days` are usage errors; an `SP_API` that curl cannot parse exits 1 rather than 2 ("app unreachable")
+- `projects` and `tags` ignored `--json`, while the readme said every command honoured it
+- the plugin manifest carried `"version": "0.1.0"` and never bumped it, and Claude Code skips an update whose version it already has, so a plugin install stayed at its first copy. The manifest now has no version, and Claude Code versions the plugin by commit
+- the gate had said since 2026-09-03 that every check was proven able to fail, while `bash -n`, shellcheck, shfmt and the frontmatter check had never been shown a bad input
+
+### Changed
+
+- the token and the `user/` notes move to `$XDG_CONFIG_HOME/super-productivity-skill`, which `sp.sh home` prints and `SP_HOME` overrides: a plugin or `npx skills` update replaces the skill's directory whole, and with the manifest no longer pinning a version every update would have taken them along. A `secrets/token` beside the script is still read when the new place has none
+- the readme points at `sp.sh help` and at `SKILL.md`'s API limits instead of keeping its own copies, which had drifted: the command table had no `get` and offered `--parent` to `set`, and the four lists of API limits disagreed
+- the description names the capabilities it lacked and says it means the Super Productivity list rather than the agent's own checklist; its Russian triggers are phrases from ordinary speech
+- the gate finds scripts by shebang and docs by extension rather than from hand lists, holds the manifest to `SKILL.md`, and drives `sp.sh` against a fake API standing in for `curl`
 
 ### Security
 

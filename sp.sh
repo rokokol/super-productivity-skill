@@ -5,11 +5,20 @@ set -euo pipefail
 SP_API=${SP_API:-http://127.0.0.1:3876}
 SP_TIMEOUT=${SP_TIMEOUT:-10}
 
-# The access token is a secret, so it lives in a git-ignored file next to this
-# script rather than in the repo or in shell history. The env var wins so one
-# call can hit another instance without touching the file.
+# The access token and the private notes belong to the user, not to the install: a
+# plugin or `npx skills` update replaces this script's directory whole, so they live in
+# the XDG config directory. The old place beside the script is still read when the new
+# one has no token, so an install set up before the move keeps working. The env var
+# wins so one call can hit another instance without touching the file
+HERE=$(dirname "$(readlink -f "$0")")
+SP_HOME=${SP_HOME:-"${XDG_CONFIG_HOME:-$HOME/.config}/super-productivity-skill"}
 SP_TOKEN=${SP_TOKEN:-}
-SP_TOKEN_FILE=${SP_TOKEN_FILE:-"$(dirname "$(readlink -f "$0")")/secrets/token"}
+if [ -z "${SP_TOKEN_FILE:-}" ]; then
+  SP_TOKEN_FILE=$SP_HOME/token
+  if [ ! -r "$SP_TOKEN_FILE" ] && [ -r "$HERE/secrets/token" ]; then
+    SP_TOKEN_FILE=$HERE/secrets/token
+  fi
+fi
 if [ -z "$SP_TOKEN" ] && [ -r "$SP_TOKEN_FILE" ]; then
   SP_TOKEN=$(tr -d '[:space:]' <"$SP_TOKEN_FILE")
 fi
@@ -19,18 +28,21 @@ E_CONN=2
 E_NAME=3
 E_API=4
 E_AUTH=5
+E_DATA=6
 
 usage() {
   cat <<'EOF'
 sp.sh — Super Productivity over its Local REST API
 
-  health                       server + renderer status
-  current                      currently tracked task
+  help                         this text
+  home                         the private directory: token and user/ notes
+  health                       server + renderer status, as JSON
+  current                      currently tracked task, as JSON
   projects | tags              id and title of every project / tag
   list   [filters]             tasks, one line each
-  get    <id> [--json]         a single task
+  get    <id>                  a single task
   add    "title" [options]     create a task
-  set    <id> [options]        update a task
+  set    <id> [options]        update a task: any add option but --parent
   done   <id>...               mark done
   rm     <id>...               delete (irreversible)
   start  <id>                  start the timer on a task
@@ -40,26 +52,33 @@ sp.sh — Super Productivity over its Local REST API
 
 Filters for list:
   --project P   --tag T   --query TEXT   --today   --done   --all
-  --source active|archived|all            --limit N            --json
+  --source active|archived|all            --limit N
 
 Options for add / set:
   --project P            project by title or id (a task lives in exactly one)
-  --tag T[,T2]           tags by title or id; on set, +T adds and -T removes
+  --tag T[,T2]           tags by title or id; on set, T,T2 replaces the set
+                         while +T adds and -T removes — one form or the other
   --due today|tomorrow|+3d|YYYY-MM-DD|none
   --at "YYYY-MM-DD HH:MM"|none            due date with a time
   --est 90m|1h30m|2h|0                    time estimate
   --notes TEXT           --title TEXT (set only)
-  --parent <id>          create as a subtask; excludes --project and --tag
+  --parent <id>          (add only) create as a subtask; excludes --project and --tag
   --done | --undone      (set only)
-  --json                 raw API payload instead of the one-line format
 
-Environment: SP_API (default http://127.0.0.1:3876), SP_TOKEN, SP_TOKEN_FILE
-(default secrets/token next to this script), SP_TIMEOUT
+--json prints the raw API payload instead of the one-line format, for list, get,
+add, set, done, projects and tags; health and current print JSON anyway
+
+stats counts leaf tasks. --by day lists the last N days (default 7, today
+included); --by project and --by tag show all-time spent unless --days is given,
+and then only what was spent in that window
+
+Environment: SP_API (default http://127.0.0.1:3876), SP_TOKEN, SP_HOME (default
+$XDG_CONFIG_HOME/super-productivity-skill), SP_TOKEN_FILE (default token in SP_HOME,
+else secrets/token next to this script), SP_TIMEOUT
 
 The token comes from Settings -> Misc -> Access Token
 
-The API cannot create projects or tags, set up recurring tasks, or re-parent a
-subtask — do that in the app
+Exit codes and what the API cannot do: SKILL.md beside this script
 EOF
 }
 
@@ -68,6 +87,18 @@ die() {
   shift
   printf '%s\n' "$*" >&2
   exit "$code"
+}
+
+# jq's own failures — 2 system, 3 compile, 5 runtime — would otherwise leak out as this
+# script's status, where 3 and 5 already mean "name unresolved" and "token rejected".
+# 1 and 4 are -e verdicts, not failures, and pass through
+jq() {
+  local rc=0
+  command jq "$@" || rc=$?
+  case $rc in
+    2 | 3 | 5) die $E_DATA "jq failed with code $rc: the API sent data of an unexpected shape, or sp.sh has a bug" ;;
+  esac
+  return "$rc"
 }
 
 # jq helpers shared by every filter below
@@ -105,6 +136,7 @@ api() {
   out=$(curl "${args[@]}" "$SP_API$path" 2>/dev/null) || rc=$?
   case $rc in
     0) ;;
+    1 | 3) die $E_USAGE "SP_API=$SP_API is not a URL curl can use (curl code $rc)" ;;
     6 | 7 | 28) die $E_CONN "cannot reach Super Productivity at $SP_API
 start the desktop app and enable Settings -> Misc -> Enable local REST API" ;;
     *) die $E_CONN "curl failed with code $rc on $method $path" ;;
@@ -112,7 +144,8 @@ start the desktop app and enable Settings -> Misc -> Enable local REST API" ;;
 
   code=${out##*$'\n'}
   json=${out%$'\n'*}
-  if [ -z "$json" ] || ! jq -e . >/dev/null 2>&1 <<<"$json"; then
+  # the real jq: a parse failure here is the diagnosis, not an internal error
+  if [ -z "$json" ] || ! command jq -e . >/dev/null 2>&1 <<<"$json"; then
     die $E_API "HTTP $code: unexpected non-JSON response"
   fi
   if [ "$(jq -r '.ok' <<<"$json")" != "true" ]; then
@@ -227,7 +260,7 @@ fmt() {
 }
 
 OPT_JSON=0 OPT_PROJECT='' OPT_TAG='' OPT_DUE='' OPT_AT='' OPT_EST='' OPT_NOTES='' \
-  OPT_PARENT='' OPT_TITLE='' OPT_QUERY='' OPT_SOURCE='' OPT_LIMIT='' OPT_DAYS=7 OPT_BY=project
+  OPT_PARENT='' OPT_TITLE='' OPT_QUERY='' OPT_SOURCE='' OPT_LIMIT='' OPT_DAYS=7 OPT_DAYS_SET=0 OPT_BY=project
 OPT_TODAY=0 OPT_DONE_FILTER=0 OPT_ALL=0 OPT_MARK=''
 POS=()
 HAS_NOTES=0
@@ -246,8 +279,12 @@ parse_flags() {
       --parent) OPT_PARENT=${2:?--parent needs a value}; shift ;;
       --query) OPT_QUERY=${2:?--query needs a value}; shift ;;
       --source) OPT_SOURCE=${2:?--source needs a value}; shift ;;
-      --limit) OPT_LIMIT=${2:?--limit needs a value}; shift ;;
-      --days) OPT_DAYS=${2:?--days needs a value}; shift ;;
+      --limit)
+        OPT_LIMIT=${2:?--limit needs a value}; shift
+        [[ $OPT_LIMIT =~ ^[0-9]+$ ]] || die $E_USAGE "--limit takes a whole number, not \"$OPT_LIMIT\"" ;;
+      --days)
+        OPT_DAYS=${2:?--days needs a value}; OPT_DAYS_SET=1; shift
+        [[ $OPT_DAYS =~ ^[1-9][0-9]*$ ]] || die $E_USAGE "--days takes a whole number of days from 1, not \"$OPT_DAYS\"" ;;
       --by) OPT_BY=${2:?--by needs a value}; shift ;;
       --today) OPT_TODAY=1 ;;
       --done) OPT_DONE_FILTER=1; OPT_MARK=true ;;
@@ -341,51 +378,62 @@ cmd_list() {
 }
 
 cmd_stats() {
-  local data since
-  data=$(api GET '/tasks?includeDone=true&source=all')
-  since=$(date -d "$OPT_DAYS days ago" +%F)
+  local data since pmap tmap win=false
   case $OPT_BY in
     project | tag | day) ;;
     *) die $E_USAGE "--by takes project, tag or day" ;;
   esac
-  jq -r --arg by "$OPT_BY" --arg since "$since" --argjson days "$OPT_DAYS" \
-    --argjson p "$(name_map projects)" --argjson t "$(name_map tags)" "$JQ_LIB"'
+  data=$(api GET '/tasks?includeDone=true&source=all')
+  pmap=$(name_map projects) || exit $?
+  tmap=$(name_map tags) || exit $?
+  # the last N days include today, so the window opens N-1 days back
+  since=$(date -d "$((OPT_DAYS - 1)) days ago" +%F)
+  { [ "$OPT_BY" = day ] || [ "$OPT_DAYS_SET" = 1 ]; } && win=true
+  jq -r --arg by "$OPT_BY" --arg since "$since" --argjson days "$OPT_DAYS" --argjson win "$win" \
+    --argjson p "$pmap" --argjson t "$tmap" "$JQ_LIB"'
+    # inside a window only timeSpentOnDay can say when the time went in
+    def spent: if $win
+      then (.timeSpentOnDay // {}) | to_entries | map(select(.key >= $since) | .value) | add // 0
+      else .timeSpent // 0 end;
     # only leaves count: a parent stores the sum of its subtasks timeSpent
     [.[] | select(((.subTaskIds // []) | length) == 0)] as $leaves |
     ($leaves | map(select(.isDone | not)) | length) as $open |
     ($leaves | map(select(.isDone)) | length) as $done |
-    ($leaves | map(.timeSpent // 0) | add // 0) as $spent |
+    ($leaves | map(spent) | add // 0) as $spent |
     "leaf tasks \($leaves | length)  open \($open)  done \($done)  tracked \($spent | dur)",
-    "",
     (if $by == "day" then
       ($leaves | map((.timeSpentOnDay // {}) | to_entries) | add // []
         | map(select(.key >= $since)) | group_by(.key) | sort_by(.[0].key) | reverse
         | .[] | "\(.[0].key)  \(map(.value) | add | dur)")
      elif $by == "project" then
-      ($leaves | group_by(.projectId // "INBOX_PROJECT") | sort_by(-(map(.timeSpent // 0) | add)) | .[]
-        | "\($p[.[0].projectId // "INBOX_PROJECT"] // .[0].projectId)  \(map(.timeSpent // 0) | add | dur) spent  \(map(.timeEstimate // 0) | add | dur) est  \(map(select(.isDone | not)) | length) open  \(length) total")
+      ($leaves | group_by(.projectId // "INBOX_PROJECT") | sort_by(-(map(spent) | add)) | .[]
+        | "\($p[.[0].projectId // "INBOX_PROJECT"] // .[0].projectId)  \(map(spent) | add | dur) spent  \(map(.timeEstimate // 0) | add | dur) est  \(map(select(.isDone | not)) | length) open  \(length) total")
      else
       ($leaves | map(. as $task | ((.tagIds // []) | if length == 0 then ["(untagged)"] else . end)
-        | map({tag: ., task: $task})) | add // [] | group_by(.tag) | sort_by(-(map(.task.timeSpent // 0) | add)) | .[]
-        | "\($t[.[0].tag] // .[0].tag)  \(map(.task.timeSpent // 0) | add | dur) spent  \(map(select(.task.isDone | not)) | length) open  \(length) total")
+        | map({tag: ., task: $task})) | add // [] | group_by(.tag) | sort_by(-(map(.task | spent) | add)) | .[]
+        | "\($t[.[0].tag] // .[0].tag)  \(map(.task | spent) | add | dur) spent  \(map(select(.task.isDone | not)) | length) open  \(length) total")
      end),
-    "",
-    (if $by == "day" then "window: last \($days) days" elif $by == "tag" then "tags overlap, so rows do not sum to the total" else "" end)
-    | select(. != "")' <<<"$data"
+    (if $by == "tag" then "tags overlap, so rows do not sum to the total" else empty end),
+    (if $win then "window: the last \($days) days, today included"
+       + (if $by == "day" then "" else "; estimates and open counts are not windowed" end)
+     else empty end)' <<<"$data"
 }
 
 main() {
   [ $# -gt 0 ] || { usage; exit 0; }
-  local cmd=$1 tag_ids='' cur='' add_ids='' del_ids='' id='' title=''
+  local cmd=$1 tag_ids='' cur='' add_ids='' del_ids='' id='' title='' item
+  local -a items=() plus=() minus=() bare=()
   shift
   parse_flags "$@"
 
   case $cmd in
     help | -h | --help) usage ;;
+    home) printf '%s\n' "$SP_HOME" ;;
     health) api GET /health | jq . ;;
     current) api GET /status | jq . ;;
-    projects) catalog projects | jq -r '.[] | "\(.id)\t\(.title)"' ;;
-    tags) catalog tags | jq -r '.[] | "\(.id)\t\(.title)"' ;;
+    projects | tags)
+      if [ "$OPT_JSON" = 1 ]; then catalog "$cmd" | jq .
+      else catalog "$cmd" | jq -r '.[] | "\(.id)\t\(.title)"'; fi ;;
     list) cmd_list ;;
     get)
       [ ${#POS[@]} -ge 1 ] || die $E_USAGE "get needs a task id"
@@ -404,11 +452,23 @@ main() {
       [ -n "$OPT_PARENT" ] && die $E_USAGE "the API cannot re-parent a task — delete and recreate it"
       build_body
       if [ -n "$OPT_TAG" ]; then
-        if [[ $OPT_TAG == *+* || $OPT_TAG == *-* ]]; then
+        # only an item's first character decides its role — a hyphen inside a name
+        # such as foo-bar is part of the name
+        IFS=, read -ra items <<<"$OPT_TAG"
+        for item in "${items[@]}"; do
+          case $item in
+            +*) plus+=("${item#+}") ;;
+            -*) minus+=("${item#-}") ;;
+            ?*) bare+=("$item") ;;
+          esac
+        done
+        if [ ${#plus[@]} -gt 0 ] || [ ${#minus[@]} -gt 0 ]; then
+          [ ${#bare[@]} -eq 0 ] ||
+            die $E_USAGE "--tag either replaces the set (a,b) or edits it (+a,-b) — \"$OPT_TAG\" mixes both"
           # a bare --tag replaces the whole array, so +x/-y merge against the current one
           cur=$(api GET "/tasks/${POS[0]}" | jq -c '.tagIds // []') || exit $?
-          add_ids=$(resolve_list tags "$(tr ',' '\n' <<<"$OPT_TAG" | grep '^+' | sed 's/^+//' | paste -sd, - || true)") || exit $?
-          del_ids=$(resolve_list tags "$(tr ',' '\n' <<<"$OPT_TAG" | grep '^-' | sed 's/^-//' | paste -sd, - || true)") || exit $?
+          add_ids=$(resolve_list tags "$(IFS=,; printf '%s' "${plus[*]}")") || exit $?
+          del_ids=$(resolve_list tags "$(IFS=,; printf '%s' "${minus[*]}")") || exit $?
           tag_ids=$(jq -c --argjson a "$add_ids" --argjson d "$del_ids" '. + $a - $d | unique' <<<"$cur")
         else
           tag_ids=$(resolve_list tags "$OPT_TAG") || exit $?

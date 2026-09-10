@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# A stand-in for curl that answers sp.sh's requests from files, so its behaviour can be
+# tested with no Super Productivity instance and no network. Put this directory first
+# on PATH and point FAKE_SP at a directory holding projects.json, tags.json and
+# tasks.json (each the `data` array the real API would return).
+#
+# Every request is appended to $FAKE_SP/requests as "METHOD PATH BODY", so a test can
+# assert what sp.sh sent, and the bearer token of the last request is written to
+# $FAKE_SP/auth. FAKE_CURL_EXIT=N makes the call fail the way curl does, with exit
+# status N and no output
+set -euo pipefail
+
+[ -z "${FAKE_CURL_EXIT:-}" ] || exit "$FAKE_CURL_EXIT"
+: "${FAKE_SP:?FAKE_SP must name the fixture directory}"
+
+method=GET body='' url=''
+while [ $# -gt 0 ]; do
+  case $1 in
+    -X)
+      method=$2
+      shift
+      ;;
+    --data-binary)
+      body=$2
+      shift
+      ;;
+    -H)
+      case $2 in 'Authorization: Bearer '*) printf '%s\n' "${2#Authorization: Bearer }" >"$FAKE_SP/auth" ;; esac
+      shift
+      ;;
+    -w | --max-time)
+      shift
+      ;;
+    -*) ;;
+    *) url=$1 ;;
+  esac
+  shift
+done
+
+path=/${url#*://*/}
+route=${path%%\?*}
+printf '%s %s %s\n' "$method" "$path" "$body" >>"$FAKE_SP/requests"
+
+reply() { # reply HTTP_CODE JSON — the body, then the -w '\n%{http_code}' trailer
+  printf '%s\n%s' "$2" "$1"
+}
+ok() { reply 200 "$(jq -c '{ok: true, data: .}')"; }
+missing() { reply 404 '{"ok":false,"error":{"code":"NOT_FOUND","message":"no such route or task"}}'; }
+
+task() { jq -c --arg id "$1" '.[] | select(.id == $id)' "$FAKE_SP/tasks.json"; }
+
+case "$method $route" in
+  "GET /health") ok <<<'{"server":"up","rendererReady":true}' ;;
+  "GET /projects") ok <"$FAKE_SP/projects.json" ;;
+  "GET /tags") ok <"$FAKE_SP/tags.json" ;;
+  "GET /tasks") ok <"$FAKE_SP/tasks.json" ;;
+  "GET /tasks/"*)
+    found=$(task "${route#/tasks/}")
+    if [ -n "$found" ]; then ok <<<"$found"; else missing; fi
+    ;;
+  "PATCH /tasks/"*)
+    found=$(task "${route#/tasks/}")
+    if [ -n "$found" ]; then jq -c --argjson b "$body" '. + $b' <<<"$found" | ok; else missing; fi
+    ;;
+  "POST /tasks") jq -c '{id: "new"} + .' <<<"$body" | ok ;;
+  *) missing ;;
+esac

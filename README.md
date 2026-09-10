@@ -60,15 +60,7 @@ git clone https://github.com/rokokol/super-productivity-skill \
 
 ## What it does
 
-| Command | |
-|---|---|
-| `list` | filter by `--project`, `--tag`, `--query`, `--today`, `--done`, `--all`, `--source` |
-| `add` | title plus `--project`, `--tag a,b`, `--due`, `--at`, `--est`, `--notes`, `--parent` |
-| `set` | any of the above, plus `--title`, `--done`/`--undone`, and `+tag`/`-tag` merging |
-| `done` / `rm` / `archive` / `restore` | accept several ids at once |
-| `start` / `stop` | the built-in time tracker |
-| `stats` | tracked time and open/done counts, `--by project\|tag\|day`, `--days N` |
-| `projects` / `tags` / `health` / `current` | ids, titles, server state |
+Lists, creates, edits, schedules, completes, archives and deletes tasks, runs the built-in timer, and reports where the time went by project, tag or day. `./sp.sh help` is the complete command and flag reference — it is printed by the script itself, so it cannot drift from what the script accepts
 
 Projects and tags are passed by **name**, not id — resolution is case-insensitive, accepts a unique substring, and folds Cyrillic ё/е, so `--project note --tag hob,craft` hits "Notes" tagged "Hobby" and "Craft". An unknown or ambiguous name exits non-zero with the candidate list instead of guessing
 
@@ -80,22 +72,13 @@ The script is usable on its own:
 ./sp.sh stats --by day --days 14
 ```
 
-`./sp.sh help` prints the full flag reference, and `--json` turns any command into machine-readable output
-
 ## What it cannot do
 
-The REST API has no endpoint for these, so the skill refuses rather than pretending:
-
-- creating or renaming projects and tags (`POST /projects` and `POST /tags` return 404) — make them in the app
-- recurring tasks
-- re-parenting a subtask (`parentId` is immutable on PATCH)
-- notes as standalone entities, boards
-
-Two more quirks worth knowing: `TODAY` is a due-date query rather than a real tag, so a task goes on today's list via `--due today`; and archived tasks are hidden from a plain `list` — reach them with `--source archived` or `--all`, which is also what makes `stats` span finished days
+Where the REST API has no endpoint — a project or a tag cannot be created through it, for one — the skill refuses rather than pretending. The complete list, with what the agent tells you to do instead, is [API limits](SKILL.md#api-limits) in `SKILL.md`, and the quirks worth knowing, such as `TODAY` being a date query rather than a real tag, are under [Task model](SKILL.md#task-model) there
 
 ## Private context
 
-The skill can keep durable personal conventions in the git-ignored `user/` directory beside `SKILL.md`: `preferences.md` describes how you prefer to work with the tool, while `projects/*.md` records what belongs in existing projects, their usual tags, estimation style, or scheduling policy. These notes are a local cache rather than API state, so they never contain tokens, ids, task snapshots, or statistics, and live API data always wins when a note becomes stale
+The skill can keep durable personal conventions in `user/` inside its private directory — `~/.config/super-productivity-skill` unless `XDG_CONFIG_HOME` or `SP_HOME` says otherwise, and `./sp.sh home` prints it — which a plugin or `npx skills` update leaves alone, unlike the skill's own directory: `preferences.md` describes how you prefer to work with the tool, while `projects/*.md` records what belongs in existing projects, their usual tags, estimation style, or scheduling policy. These notes are a local cache rather than API state, so they never contain tokens, ids, task snapshots, or statistics, and live API data always wins when a note becomes stale
 
 ## Tests
 
@@ -103,17 +86,17 @@ The skill can keep durable personal conventions in the git-ignored `user/` direc
 nix develop -c ./tests/check.sh
 ```
 
-Lints the scripts, checks that `SKILL.md` still carries the frontmatter an agent loads it by, and resolves every relative link and heading anchor in the docs — then proves each of those can go red against a known-bad fixture. The secret gate is exercised end to end in throwaway repositories: red on a git-ignored path forced into the index, then red on each planted key shape in turn
+Lints every bash script in the repository, found by its shebang rather than by a list; checks that `SKILL.md` still carries the frontmatter an agent loads it by, and that the plugin manifest describes it the same way and pins no version; resolves every relative link and heading anchor in the docs; and drives `sp.sh` against a fake API that stands in for `curl`, asserting what it sends and which exit code it picks. Each linter and gate is shown going red on a known-bad input, one per tool, and the behaviour assertions on a probe their own helper has to reject. The secret gate is exercised end to end in throwaway repositories: red on a git-ignored path forced into the index, then red on each planted key shape in turn
 
 ## Security
 
-Every request carries a bearer token, issued by the app under Settings → Misc → **Access Token**. The script reads it from `$SP_TOKEN`, and otherwise from `secrets/token` beside the script — that path is git-ignored, which keeps the secret out of the repository. Write it from the skill's own directory, not from wherever your shell happens to be, or it lands in some other repository that does not ignore it. The value is typed at a prompt that does not echo, so it stays out of your shell history too:
+Every request carries a bearer token, issued by the app under Settings → Misc → **Access Token**. The script reads it from `$SP_TOKEN`, and otherwise from `token` in the private directory, outside any repository and out of reach of an update that replaces the skill's directory. A `secrets/token` beside the script, where older installs kept it, is still read when the private directory has none. Run this from the skill's directory; the value is typed at a prompt that does not echo, so it stays out of your shell history too:
 
 ```bash
-read -rs t && mkdir -p secrets && chmod 700 secrets && (umask 077 && printf '%s\n' "$t" >secrets/token) && unset t
+read -rs t && d=$(./sp.sh home) && mkdir -p "$d" && chmod 700 "$d" && (umask 077 && printf '%s\n' "$t" >"$d/token") && unset t
 ```
 
-`SP_TOKEN_FILE` points somewhere else, `SP_API` overrides the base URL. A rejected or missing token exits 5 with the path to fix
+`SP_TOKEN_FILE` points at another file, `SP_API` overrides the base URL. A rejected or missing token exits 5 with the path to fix
 
 > [!IMPORTANT]
 > The token grants full read and write access to your tasks, so treat it like a password and keep the API bound to `127.0.0.1`

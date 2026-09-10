@@ -47,8 +47,9 @@ scan "forge or registry token" \
 scan "model-provider API key" \
   '(sk-ant-[a-z0-9]+-[A-Za-z0-9_-]{80,}|sk-proj-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{48}|AIza[A-Za-z0-9_-]{35})'
 
-# Super Productivity's own token: a long opaque string assigned to the variable
-# the script reads, or written into a documented example as if it were real
+# Super Productivity's own token, assigned to the variable the script reads — in a
+# script or in a documented example alike. A bare token with no SP_TOKEN beside it
+# is opaque and has no prefix to match, so it is beyond this pattern
 scan "an access token spelled out in a file" \
   'SP_TOKEN[=:][[:space:]]*["'\'']?[A-Za-z0-9_.-]{24,}'
 
