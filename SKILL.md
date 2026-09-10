@@ -12,14 +12,15 @@ Run `sp.sh help` before using an unfamiliar command or flag. Do not guess the in
 
 ## Session setup
 
-The Local REST API requires the bearer token from **Settings → Misc → Access Token**. `sp.sh` reads `$SP_TOKEN`, then falls back to the git-ignored `secrets/token` beside the script:
+The Local REST API requires the bearer token from **Settings → Misc → Access Token**. `sp.sh` reads `$SP_TOKEN`, then falls back to the git-ignored `secrets/token` beside the script — beside `sp.sh`, not in whatever directory the session happens to be in, where no `.gitignore` covers it
+
+The token never passes through the agent. Ask the user to run this in their own terminal, with the directory of the resolved `sp.sh` in place of `DIR`. It reads the token without echoing it, so the value lands in neither a command line nor a transcript:
 
 ```bash
-mkdir -p secrets && chmod 700 secrets
-printf '%s\n' '<token>' > secrets/token && chmod 600 secrets/token
+read -rs t && mkdir -p "DIR/secrets" && chmod 700 "DIR/secrets" && (umask 077 && printf '%s\n' "$t" >"DIR/secrets/token") && unset t
 ```
 
-Never place the token in a command line, task, note, example, or tracked file. Exit 5 means the token is missing or rejected: ask for a fresh token and write it to `secrets/token`; never retry unauthenticated
+Never place the token in a command line, task, note, example, or tracked file, and never ask for it in the conversation. Exit 5 means the token is missing or rejected: ask the user to run the command above with a fresh one; never retry unauthenticated
 
 ## Operating loop
 
@@ -34,7 +35,7 @@ For `set`, `done`, `archive`, `restore`, or `rm`, read the target first so its i
 
 ## Private context
 
-Keep durable user-specific guidance in the git-ignored `user/` directory:
+Keep durable user-specific guidance in the git-ignored `user/` directory beside `sp.sh` — never in the current directory, where it would land in someone else's repository:
 
 ```text
 user/
@@ -110,4 +111,4 @@ sp.sh stats --by day --days 14
 | 2 | App unreachable: ask the user to start the desktop app and enable **Settings → Misc → Enable local REST API** |
 | 3 | Project or tag unresolved: relay the candidates and ask |
 | 4 | API error: relay `code: message` verbatim |
-| 5 | Token missing or rejected: replace `secrets/token` as described above |
+| 5 | Token missing or rejected: ask the user to write a fresh one with the command in Session setup |

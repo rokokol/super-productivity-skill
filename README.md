@@ -107,11 +107,10 @@ Lints the scripts, checks that `SKILL.md` still carries the frontmatter an agent
 
 ## Security
 
-Every request carries a bearer token, issued by the app under Settings → Misc → **Access Token**. The script reads it from `$SP_TOKEN`, and otherwise from `secrets/token` beside the script — that path is git-ignored, which keeps the secret out of the repository and out of your shell history:
+Every request carries a bearer token, issued by the app under Settings → Misc → **Access Token**. The script reads it from `$SP_TOKEN`, and otherwise from `secrets/token` beside the script — that path is git-ignored, which keeps the secret out of the repository. Write it from the skill's own directory, not from wherever your shell happens to be, or it lands in some other repository that does not ignore it. The value is typed at a prompt that does not echo, so it stays out of your shell history too:
 
 ```bash
-mkdir -p secrets && chmod 700 secrets
-printf '%s\n' '<token>' > secrets/token && chmod 600 secrets/token
+read -rs t && mkdir -p secrets && chmod 700 secrets && (umask 077 && printf '%s\n' "$t" >secrets/token) && unset t
 ```
 
 `SP_TOKEN_FILE` points somewhere else, `SP_API` overrides the base URL. A rejected or missing token exits 5 with the path to fix

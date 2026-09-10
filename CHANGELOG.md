@@ -4,6 +4,16 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 Written after the fact from the repository's history, so the entries below say what each change did rather than reproducing the reasoning; the commit bodies carry that
 
+## 2026-09-10
+
+### Fixed
+
+- the private `user/` context is placed beside `sp.sh` explicitly, not in whatever directory the session happens to be in
+
+### Security
+
+- **the token could land in some other repository, and in the transcript.** The setup snippet wrote to a relative `secrets/token`, so run from any other directory it created the file where no `.gitignore` covered it, and it put the token itself on the command line — into shell history, and for an agent into the transcript — which the very next paragraph forbade. The token now never passes through the agent: the user types it at a prompt that does not echo, into the `secrets/` beside `sp.sh`. The README carried the same snippet and claimed it kept the token out of shell history
+
 ## 2026-09-07
 
 ### Added
