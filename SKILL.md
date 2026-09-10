@@ -63,13 +63,15 @@ user/
 - The plain display is flat, not hierarchical. A `sub` line is not guaranteed to belong to the nearest parent; use JSON `parentId` and `subTaskIds`
 - An open subtask can outlive a done parent. If a listed task has `parentId`, fetch its parent before reorganizing the tree
 - A complete audit requires `list --all --source all --json`; ordinary `list` omits done and archived tasks
+- A parent's `timeEstimate` is derived, not kept: the app overwrites it with the sum of its subtasks' remaining estimates whenever a subtask's estimate or done state changes or a subtask is deleted. Estimate the subtasks of a decomposed task, never the parent as well; an estimate written to the parent lasts only until the next such change, and `stats` counts leaf time only
+- Deleting a parent's last subtask copies that subtask's time spent and estimate onto the parent. When flattening a tree, delete the subtask that carries tracked time last, or that time leaves `stats`
+- Notes are markdown. Since Super Productivity 18.10 `- [ ]` and `- [x]` lines render as a clickable checklist with a done/total badge on the task, provided the note has at least two of them or nothing else; through the API they stay plain text in `notes`
 
 ## Safe writes
 
 - Every write goes through an API allow-list. Unsupported fields can be discarded while the API still returns `ok: true`, so read back the exact fields that should have changed
 - Moving a parent to another project cascades to its subtasks. Inspect the complete tree first, then verify the `projectId` of the parent and every child
 - Prefer `done` or `archive` over deletion. Confirm `rm` with the user because it is irreversible
-- Estimate executable leaf tasks in a decomposed task. `stats` omits parent estimates and counts leaf time only, so adding parent and child estimates double-counts the plan
 
 ## API limits
 

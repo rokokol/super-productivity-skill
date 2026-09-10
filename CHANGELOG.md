@@ -20,6 +20,7 @@ Written after the fact from the repository's history, so the entries below say w
 
 ### Changed
 
+- `SKILL.md` says why a decomposed task is estimated on its subtasks — the app recomputes a parent's estimate from them — which subtask to delete last so flattening a tree keeps its tracked time, and when a note renders as a checklist
 - the token and the `user/` notes stay in the skill directory only when it already holds them, as a synced clone does, and otherwise go to `$XDG_CONFIG_HOME/super-productivity-skill` — `sp.sh home` prints which, `SP_HOME` overrides it, and the layout is `secrets/token` and `user/` in both. A plugin or `npx skills` update replaces the skill's directory whole, and with the manifest no longer pinning a version every update would have taken them along
 - dates work with BSD `date`, the one macOS ships: `--due`, `--at` and the `stats` window used GNU's `date -d`, and the script found itself with `readlink -f`, which older macOS lacks. `--at` now takes exactly the documented `YYYY-MM-DD HH:MM`, and a day that does not exist is refused on both kinds of `date`
 - the readme points at `sp.sh help` and at `SKILL.md`'s API limits instead of keeping its own copies, which had drifted: the command table had no `get` and offered `--parent` to `set`, and the four lists of API limits disagreed
