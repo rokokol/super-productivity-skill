@@ -81,6 +81,9 @@ Options for add / set:
 --json prints the raw API payload instead of the one-line format, for list, get,
 add, set, done, projects and tags; health and current print JSON anyway
 
+A task id may open with "-": pass it as it is, or after --, which ends the options
+(sp.sh set --est 2h -- <id>)
+
 stats counts leaf tasks. --by day lists the last N days (default 7, today
 included); --by project and --by tag show all-time spent unless --days is given,
 and then only what was spent in that window
@@ -331,7 +334,11 @@ parse_flags() {
       --undone) OPT_MARK=false ;;
       --all) OPT_ALL=1 ;;
       --) shift; POS+=("$@"); return ;;
-      -*) usage >&2; die $E_USAGE "unknown flag: $1" ;;
+      # A task id is a nanoid and "-" is in its alphabet, so an id can open with one: a word
+      # of an id's shape is an id rather than an unknown flag, and `--` works before any
+      -*)
+        [[ $1 =~ ^-[A-Za-z0-9_-]{20}$ ]] || { usage >&2; die $E_USAGE "unknown flag: $1 — a task id that opens with - can also go after --"; }
+        POS+=("$1") ;;
       *) POS+=("$1") ;;
     esac
     shift

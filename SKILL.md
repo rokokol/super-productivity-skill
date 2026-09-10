@@ -97,6 +97,8 @@ sp.sh stats --by day --days 14
 
 `stats` reads live and archived API data, never backup files. It counts leaf tasks only, which avoids counting a parent's aggregate time again
 
+A task id can open with `-`, since `-` is in the alphabet ids are drawn from. Pass it as it is, or after `--`: `sp.sh set --est 2h -- <id>`
+
 ## Output and errors
 
 ```text

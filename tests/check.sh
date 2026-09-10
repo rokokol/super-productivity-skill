@@ -207,6 +207,9 @@ jq -n --arg d0 "$(date +%F)" --arg d6 "$(date -d '6 days ago' +%F)" --arg d7 "$(
   id: "t1", title: "Water plants", projectId: "p-notes", tagIds: ["t-home"], isDone: false,
   timeSpent: 10800000, timeEstimate: 0, subTaskIds: [],
   timeSpentOnDay: {($d0): 3600000, ($d6): 3600000, ($d7): 3600000}
+}, {
+  id: "-3PluTV--NWbvqa0eL_VM", title: "An id that opens with a dash", projectId: "INBOX_PROJECT",
+  tagIds: [], isDone: false, timeSpent: 0, timeEstimate: 0, subTaskIds: []
 }]' >"$fake/api/tasks.json"
 # the same API with a projects payload of the wrong shape, for the internal-failure code
 cp "$fake/api"/*.json "$fake/broken/"
@@ -286,6 +289,18 @@ expect_rc 6 "a payload of the wrong shape" sp FAKE_SP="$fake/broken" ./sp.sh lis
 expect_out "projects --json prints the payload" '"title": "Notes"' sp ./sp.sh projects --json
 expect_out "tags --json prints the payload" '"title": "Home"' sp ./sp.sh tags --json
 expect_out "help lists itself" '^  help ' sp ./sp.sh help
+
+# Task ids are nanoids, whose alphabet has "-" in it, so one can open with a dash. Taken for
+# an unknown flag, it made every command on that task a usage error, while an id copied
+# from `list` is exactly what an agent passes
+dash_id=-3PluTV--NWbvqa0eL_VM
+sp ./sp.sh set "$dash_id" --est 2h >/dev/null 2>&1 || problem "set on a task whose id opens with a dash failed"
+[ "$(grep '^PATCH ' "$fake/api/requests" | tail -n1 | cut -d' ' -f2)" = "/tasks/$dash_id" ] ||
+  problem "set on a dash-led id did not PATCH /tasks/$dash_id"
+expect_rc 0 "get on a dash-led id" sp ./sp.sh get "$dash_id"
+expect_rc 0 "get on a dash-led id after --" sp ./sp.sh get -- "$dash_id"
+expect_rc 1 "an unknown long flag is still refused" sp ./sp.sh list --bogus
+expect_rc 1 "an unknown short flag is still refused" sp ./sp.sh list -x
 
 # Where the token and the notes live: in the skill directory when it already holds them —
 # a clone synced between machines carries them along — and otherwise in the XDG config

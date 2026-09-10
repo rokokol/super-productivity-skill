@@ -16,6 +16,7 @@ Written after the fact from the repository's history, so the entries below say w
 - `projects` and `tags` ignored `--json`, while the readme said every command honoured it
 - the plugin manifest carried `"version": "0.1.0"` and never bumped it, and Claude Code skips an update whose version it already has, so a plugin install stayed at its first copy. The manifest now has no version, and Claude Code versions the plugin by commit
 - the gate had said since 2026-09-03 that every check was proven able to fail, while `bash -n`, shellcheck, shfmt and the frontmatter check had never been shown a bad input
+- **a task whose id opens with `-` could not be named.** Ids are nanoids, whose alphabet has `-` in it, and every command took such an id for an unknown flag, so `set`, `get`, `done` and the rest failed with a usage error on an id copied straight from `list`. A word of an id's shape is taken as an id now, and `help` and `SKILL.md` say that `--` ends the options
 
 ### Changed
 
