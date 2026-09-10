@@ -13,6 +13,7 @@ Written after the fact from the repository's history, so the entries below say w
 
 ### Fixed
 
+- **on macOS, `set --tag +a` and `set --tag -a` died with "unbound variable".** The bash 3.2 macOS ships calls an empty array unbound under `set -u`, and a merge that only adds leaves the removals empty, as one that only removes leaves the additions. The new macOS job found it on its first run; every list sp.sh walks now expands safely when empty
 - the private `user/` context is placed beside `sp.sh` explicitly, not in whatever directory the session happens to be in
 - **`set <id> --tag foo-bar` was a silent no-op.** A hyphen anywhere in the value switched `set` into merge mode, where only items starting with `+` or `-` count, so the task's current tags were sent back unchanged. Only an item's first character decides its role now, and a value mixing both forms is refused
 - `stats --by project` and `--by tag` ignored `--days`; with it they now count only the time spent inside that window

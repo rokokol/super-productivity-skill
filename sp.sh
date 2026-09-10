@@ -223,7 +223,9 @@ the REST API cannot create projects or tags — add it in the app first" ;;
 resolve_list() {
   local kind=$1 csv=$2 out=() item items=() id
   IFS=, read -ra items <<<"$csv"
-  for item in "${items[@]}"; do
+  # ${a[@]+"${a[@]}"}: bash before 4.4 calls an empty array unbound under set -u, and
+  # macOS ships 3.2
+  for item in ${items[@]+"${items[@]}"}; do
     [ -n "$item" ] || continue
     # a bare out+=("$(resolve …)") would swallow the failure exit inside the subshell
     id=$(resolve "$kind" "$item") || exit $?
@@ -349,7 +351,7 @@ parse_flags() {
 reject_today_tag() {
   local item items=()
   IFS=, read -ra items <<<"$OPT_TAG"
-  for item in "${items[@]}"; do
+  for item in ${items[@]+"${items[@]}"}; do
     case ${item#[+-]} in
       TODAY | today | Today) die $E_USAGE "TODAY is a due-date filter, not a real tag — use --due today" ;;
     esac
@@ -502,7 +504,7 @@ main() {
         # only an item's first character decides its role — a hyphen inside a name
         # such as foo-bar is part of the name
         IFS=, read -ra items <<<"$OPT_TAG"
-        for item in "${items[@]}"; do
+        for item in ${items[@]+"${items[@]}"}; do
           case $item in
             +*) plus+=("${item#+}") ;;
             -*) minus+=("${item#-}") ;;
@@ -514,8 +516,8 @@ main() {
             die $E_USAGE "--tag either replaces the set (a,b) or edits it (+a,-b) — \"$OPT_TAG\" mixes both"
           # a bare --tag replaces the whole array, so +x/-y merge against the current one
           cur=$(api GET "/tasks/${POS[0]}" | jq -c '.tagIds // []') || exit $?
-          add_ids=$(resolve_list tags "$(IFS=,; printf '%s' "${plus[*]}")") || exit $?
-          del_ids=$(resolve_list tags "$(IFS=,; printf '%s' "${minus[*]}")") || exit $?
+          add_ids=$(resolve_list tags "$(IFS=,; printf '%s' "${plus[*]+${plus[*]}}")") || exit $?
+          del_ids=$(resolve_list tags "$(IFS=,; printf '%s' "${minus[*]+${minus[*]}}")") || exit $?
           tag_ids=$(jq -c --argjson a "$add_ids" --argjson d "$del_ids" '. + $a - $d | unique' <<<"$cur")
         else
           tag_ids=$(resolve_list tags "$OPT_TAG") || exit $?
