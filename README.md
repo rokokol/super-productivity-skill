@@ -78,7 +78,7 @@ Where the REST API has no endpoint — a project or a tag cannot be created thro
 
 ## Private context
 
-The skill can keep durable personal conventions in `user/` inside its private directory — `~/.config/super-productivity-skill` unless `XDG_CONFIG_HOME` or `SP_HOME` says otherwise, and `./sp.sh home` prints it — which a plugin or `npx skills` update leaves alone, unlike the skill's own directory: `preferences.md` describes how you prefer to work with the tool, while `projects/*.md` records what belongs in existing projects, their usual tags, estimation style, or scheduling policy. These notes are a local cache rather than API state, so they never contain tokens, ids, task snapshots, or statistics, and live API data always wins when a note becomes stale
+The skill can keep durable personal conventions in `user/` inside its private directory, which `./sp.sh home` prints: the skill's own directory when it already holds `secrets/` or `user/`, so a clone you sync between machines keeps them with it, and `~/.config/super-productivity-skill` otherwise, where a plugin or `npx skills` update, which replaces the skill directory whole, cannot reach them. `SP_HOME` overrides both: `preferences.md` describes how you prefer to work with the tool, while `projects/*.md` records what belongs in existing projects, their usual tags, estimation style, or scheduling policy. These notes are a local cache rather than API state, so they never contain tokens, ids, task snapshots, or statistics, and live API data always wins when a note becomes stale
 
 ## Tests
 
@@ -90,11 +90,13 @@ Lints every bash script in the repository, found by its shebang rather than by a
 
 ## Security
 
-Every request carries a bearer token, issued by the app under Settings → Misc → **Access Token**. The script reads it from `$SP_TOKEN`, and otherwise from `token` in the private directory, outside any repository and out of reach of an update that replaces the skill's directory. A `secrets/token` beside the script, where older installs kept it, is still read when the private directory has none. Run this from the skill's directory; the value is typed at a prompt that does not echo, so it stays out of your shell history too:
+Every request carries a bearer token, issued by the app under Settings → Misc → **Access Token**. The script reads it from `$SP_TOKEN`, and otherwise from `secrets/token` in the private directory above — git-ignored when that is the skill's own directory, outside any repository when it is the XDG one. Run this from the skill's directory; the value is typed at a prompt that does not echo, so it stays out of your shell history too:
 
 ```bash
-read -rs t && d=$(./sp.sh home) && mkdir -p "$d" && chmod 700 "$d" && (umask 077 && printf '%s\n' "$t" >"$d/token") && unset t
+read -rs t && d=$(./sp.sh home)/secrets && mkdir -p "$d" && chmod 700 "$d" && (umask 077 && printf '%s\n' "$t" >"$d/token") && unset t
 ```
+
+To keep the token in a clone you sync, run `mkdir secrets` in it first, so `sp.sh home` picks the clone
 
 `SP_TOKEN_FILE` points at another file, `SP_API` overrides the base URL. A rejected or missing token exits 5 with the path to fix
 

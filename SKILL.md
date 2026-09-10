@@ -12,12 +12,12 @@ Run `sp.sh help` before using an unfamiliar command or flag. Do not guess the in
 
 ## Session setup
 
-The Local REST API requires the bearer token from **Settings → Misc → Access Token**. `sp.sh` reads `$SP_TOKEN`, then the `token` file in the private directory that `sp.sh home` prints — `$XDG_CONFIG_HOME/super-productivity-skill` by default, outside the skill, because a plugin or `npx skills` update replaces the skill's directory whole. An older `secrets/token` beside `sp.sh` is still read when the private directory has none
+The Local REST API requires the bearer token from **Settings → Misc → Access Token**. `sp.sh` reads `$SP_TOKEN`, then `secrets/token` in the private directory that `sp.sh home` prints: the skill's own directory when it already holds `secrets/` or `user/` — a clone synced between machines — and `$XDG_CONFIG_HOME/super-productivity-skill` otherwise, since a plugin or `npx skills` update replaces the skill's directory whole
 
 The token never passes through the agent. Ask the user to run this in their own terminal, with the resolved path of `sp.sh` in place of `SP`. It reads the token without echoing it, so the value lands in neither a command line nor a transcript:
 
 ```bash
-read -rs t && d=$(SP home) && mkdir -p "$d" && chmod 700 "$d" && (umask 077 && printf '%s\n' "$t" >"$d/token") && unset t
+read -rs t && d=$(SP home)/secrets && mkdir -p "$d" && chmod 700 "$d" && (umask 077 && printf '%s\n' "$t" >"$d/token") && unset t
 ```
 
 Never place the token in a command line, task, note, example, or tracked file, and never ask for it in the conversation. Exit 5 means the token is missing or rejected: ask the user to run the command above with a fresh one; never retry unauthenticated
@@ -35,7 +35,7 @@ For `set`, `done`, `archive`, `restore`, or `rm`, read the target first so its i
 
 ## Private context
 
-Keep durable user-specific guidance in `user/` inside the private directory `sp.sh home` prints — never beside `sp.sh`, which an update replaces, and never in the current directory, where it would land in someone else's repository. When that `user/` does not exist but an older one sits beside `sp.sh`, read the old one and offer the user to move it:
+Keep durable user-specific guidance in `user/` inside the private directory `sp.sh home` prints — never in the current directory, where it would land in someone else's repository:
 
 ```text
 user/

@@ -19,7 +19,8 @@ Written after the fact from the repository's history, so the entries below say w
 
 ### Changed
 
-- the token and the `user/` notes move to `$XDG_CONFIG_HOME/super-productivity-skill`, which `sp.sh home` prints and `SP_HOME` overrides: a plugin or `npx skills` update replaces the skill's directory whole, and with the manifest no longer pinning a version every update would have taken them along. A `secrets/token` beside the script is still read when the new place has none
+- the token and the `user/` notes stay in the skill directory only when it already holds them, as a synced clone does, and otherwise go to `$XDG_CONFIG_HOME/super-productivity-skill` — `sp.sh home` prints which, `SP_HOME` overrides it, and the layout is `secrets/token` and `user/` in both. A plugin or `npx skills` update replaces the skill's directory whole, and with the manifest no longer pinning a version every update would have taken them along
+- dates work with BSD `date`, the one macOS ships: `--due`, `--at` and the `stats` window used GNU's `date -d`, and the script found itself with `readlink -f`, which older macOS lacks. `--at` now takes exactly the documented `YYYY-MM-DD HH:MM`, and a day that does not exist is refused on both kinds of `date`
 - the readme points at `sp.sh help` and at `SKILL.md`'s API limits instead of keeping its own copies, which had drifted: the command table had no `get` and offered `--parent` to `set`, and the four lists of API limits disagreed
 - the description names the capabilities it lacked and says it means the Super Productivity list rather than the agent's own checklist; its Russian triggers are phrases from ordinary speech
 - the gate finds scripts by shebang and docs by extension rather than from hand lists, holds the manifest to `SKILL.md`, and drives `sp.sh` against a fake API standing in for `curl`

@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# A stand-in for BSD date, the one macOS ships, so sp.sh's dates can be tested where only
+# GNU date exists. It refuses what BSD date lacks — --version, and a -d that parses a date
+# — and translates what BSD date has — -v day adjustments, -j -f parsing — into calls to
+# the real GNU date named by $REAL_DATE. Like BSD date it is lenient about the day of the
+# month: 2026-02-30 rolls over into March rather than failing, so a caller that wants to
+# refuse an impossible date has to notice the value changed
+set -euo pipefail
+: "${REAL_DATE:?REAL_DATE must name the real date binary}"
+
+offset=0 value='' out='+%a %b %e %H:%M:%S %Z %Y'
+while [ $# -gt 0 ]; do
+  case $1 in
+    --version | -d)
+      echo "date: illegal option -- ${1#-}" >&2
+      exit 1
+      ;;
+    -v*)
+      n=${1#-v}
+      offset=$((offset + ${n%d}))
+      ;;
+    -j) ;;
+    -f)
+      case $2 in
+        %Y-%m-%d | '%Y-%m-%d %H:%M' | '%Y-%m-%d %H:%M:%S') ;;
+        *)
+          echo "date: this fake parses only %Y-%m-%d [%H:%M[:%S]], not $2" >&2
+          exit 1
+          ;;
+      esac
+      [[ $3 =~ ^([0-9]{4})-([0-9]{2})-([0-9]{2})(\ ([0-9]{2}):([0-9]{2})(:([0-9]{2}))?)?$ ]] || {
+        echo "date: Failed conversion of \`\`$3'' using format \`\`$2''" >&2
+        exit 1
+      }
+      time="${BASH_REMATCH[5]:-00}:${BASH_REMATCH[6]:-00}:${BASH_REMATCH[8]:-00}"
+      # The day first, on its own: GNU date reads a signed number right after a time as a
+      # zone offset, so "10:00:00 +28 days" would not mean what it says
+      day=$("$REAL_DATE" -d "${BASH_REMATCH[1]}-${BASH_REMATCH[2]}-01 +$((10#${BASH_REMATCH[3]} - 1)) days" +%F)
+      value="$day $time"
+      shift 2
+      ;;
+    +*) out=$1 ;;
+    *)
+      echo "date: this fake does not know $1" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+# sp.sh never parses and adjusts in one call, so a parsed value takes no offset
+if [ -n "$value" ]; then
+  [ "$offset" = 0 ] || {
+    echo "date: this fake does not combine -f with -v" >&2
+    exit 1
+  }
+  exec "$REAL_DATE" -d "$value" "$out"
+fi
+exec "$REAL_DATE" -d "$offset days" "$out"

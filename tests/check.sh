@@ -287,14 +287,19 @@ expect_out "projects --json prints the payload" '"title": "Notes"' sp ./sp.sh pr
 expect_out "tags --json prints the payload" '"title": "Home"' sp ./sp.sh tags --json
 expect_out "help lists itself" '^  help ' sp ./sp.sh help
 
-# The token lives in the XDG config directory, because a plugin or `npx skills` update
-# replaces the skill directory whole; the old place beside the script is read only when
-# the new one has nothing, so an install set up before the move keeps working
+# Where the token and the notes live: in the skill directory when it already holds them —
+# a clone synced between machines carries them along — and otherwise in the XDG config
+# directory, which a plugin or `npx skills` update cannot wipe the way it replaces the
+# skill directory. Copies of sp.sh stand in for both kinds of install, so the secrets/
+# beside the developer's own sp.sh cannot decide the result
 cfg="$fake/config"
-mkdir -p "$cfg/super-productivity-skill" "$fake/old/secrets"
-printf 'new-token\n' >"$cfg/super-productivity-skill/token"
-cp sp.sh "$fake/old/"
-printf 'old-token\n' >"$fake/old/secrets/token"
+mkdir -p "$cfg/super-productivity-skill/secrets" "$fake/synced/secrets" "$fake/fresh"
+printf 'config-token\n' >"$cfg/super-productivity-skill/secrets/token"
+printf 'synced-token\n' >"$fake/synced/secrets/token"
+cp sp.sh "$fake/synced/"
+cp sp.sh "$fake/fresh/"
+ln -s "$fake/synced/sp.sh" "$fake/linked-sp.sh"
+synced_dir=$(cd "$fake/synced" && pwd -P)
 sent_token() { # sent_token SCRIPT [VAR=value...] — the bearer token SCRIPT sends, if any
   local script=$1
   shift
@@ -303,13 +308,52 @@ sent_token() { # sent_token SCRIPT [VAR=value...] — the bearer token SCRIPT se
     FAKE_SP="$fake/api" "$@" "$script" health >/dev/null 2>&1 || true
   cat "$fake/api/auth" 2>/dev/null || true
 }
-[ "$(sent_token "$fake/old/sp.sh" XDG_CONFIG_HOME="$cfg")" = new-token ] ||
-  problem "the token in the XDG config directory did not win over the one beside the script"
-[ "$(sent_token "$fake/old/sp.sh" XDG_CONFIG_HOME="$fake/nowhere")" = old-token ] ||
-  problem "an install set up before the move lost the token beside its script"
-[ "$(sent_token "$fake/old/sp.sh" XDG_CONFIG_HOME="$fake/nowhere" SP_HOME="$cfg/super-productivity-skill")" = new-token ] ||
+[ "$(sent_token "$fake/synced/sp.sh" XDG_CONFIG_HOME="$cfg")" = synced-token ] ||
+  problem "a skill directory that holds its token lost it to the XDG one"
+[ "$(sent_token "$fake/fresh/sp.sh" XDG_CONFIG_HOME="$cfg")" = config-token ] ||
+  problem "an install with nothing beside it did not read the token from the XDG directory"
+[ "$(sent_token "$fake/linked-sp.sh" XDG_CONFIG_HOME="$cfg")" = synced-token ] ||
+  problem "sp.sh called through a symlink did not find the directory it lives in"
+[ "$(sent_token "$fake/fresh/sp.sh" SP_HOME="$fake/synced")" = synced-token ] ||
   problem "SP_HOME did not move the private directory"
-expect_out "home prints the private directory" "^$cfg/super-productivity-skill\$" sp XDG_CONFIG_HOME="$cfg" ./sp.sh home
+expect_out "home is the XDG directory for an install with nothing beside it" \
+  "^$cfg/super-productivity-skill\$" env -u SP_HOME XDG_CONFIG_HOME="$cfg" "$fake/fresh/sp.sh" home
+expect_out "home is the skill directory once it holds secrets/" \
+  "^$synced_dir\$" env -u SP_HOME XDG_CONFIG_HOME="$cfg" "$fake/synced/sp.sh" home
+
+# Dates on both kinds of date: GNU's, and BSD's as macOS ships it, played by a fake that
+# refuses -d and --version and translates -v and -j -f. Each kind owes the same answers
+real_date=$(command -v date)
+bsd_path="$HERE/tests/fixtures/fake-bsd-date"
+if env PATH="$bsd_path:$PATH" REAL_DATE="$real_date" date -d now >/dev/null 2>&1; then
+  problem "the BSD date fake accepts -d, so the runs through it prove nothing about macOS"
+fi
+# BSD date rolls an impossible day over instead of failing; a fake that failed instead
+# would let the impossible-day check below pass without the round trip that catches it
+[ "$(env REAL_DATE="$real_date" "$bsd_path/date" -j -f %Y-%m-%d 2026-02-30 +%F 2>/dev/null)" = 2026-03-02 ] ||
+  problem "the BSD date fake does not roll 2026-02-30 over into March as BSD date does"
+last_post() { grep '^POST ' "$fake/api/requests" | tail -n1 | cut -d' ' -f3-; }
+for kind in gnu bsd; do
+  date_path="$HERE/tests/fixtures/fake-curl:$PATH"
+  [ "$kind" = bsd ] && date_path="$bsd_path:$date_path"
+  on_date() { env PATH="$date_path" REAL_DATE="$real_date" FAKE_SP="$fake/api" SP_TOKEN=test "$@"; }
+  due_sent() { # due_sent DUE — the dueDay sp.sh sends for add --due DUE
+    on_date ./sp.sh add dated --due "$1" >/dev/null 2>&1 || return 1
+    jq -r '.dueDay' <<<"$(last_post)"
+  }
+  [ "$(due_sent tomorrow)" = "$(date -d tomorrow +%F)" ] || problem "$kind date: --due tomorrow"
+  [ "$(due_sent +3d)" = "$(date -d '3 days' +%F)" ] || problem "$kind date: --due +3d"
+  [ "$(due_sent 2028-02-29)" = 2028-02-29 ] || problem "$kind date: --due on a real leap day"
+  expect_rc 1 "$kind date: --due on a day that does not exist" on_date ./sp.sh add dated --due 2026-02-30
+  on_date ./sp.sh add dated --at "2026-09-12 10:00" >/dev/null 2>&1 || problem "$kind date: --at failed"
+  [ "$(jq -r '.dueWithTime' <<<"$(last_post)")" = "$(($(date -d '2026-09-12 10:00' +%s) * 1000))" ] ||
+    problem "$kind date: --at sent $(last_post)"
+  expect_rc 1 "$kind date: --at on an hour that does not exist" on_date ./sp.sh add dated --at "2026-09-12 25:00"
+  expect_out "$kind date: stats --by day reaches six days back" "^$(date -d '6 days ago' +%F) " \
+    on_date ./sp.sh stats --by day --days 7
+  expect_no "$kind date: stats --by day stops short of seven days back" "^$(date -d '7 days ago' +%F) " \
+    on_date ./sp.sh stats --by day --days 7
+done
 
 [ "$problems" = 0 ] || fail "$problems behaviour check(s) failed — see above"
 

@@ -5,20 +5,33 @@ set -euo pipefail
 SP_API=${SP_API:-http://127.0.0.1:3876}
 SP_TIMEOUT=${SP_TIMEOUT:-10}
 
-# The access token and the private notes belong to the user, not to the install: a
-# plugin or `npx skills` update replaces this script's directory whole, so they live in
-# the XDG config directory. The old place beside the script is still read when the new
-# one has no token, so an install set up before the move keeps working. The env var
-# wins so one call can hit another instance without touching the file
-HERE=$(dirname "$(readlink -f "$0")")
-SP_HOME=${SP_HOME:-"${XDG_CONFIG_HOME:-$HOME/.config}/super-productivity-skill"}
-SP_TOKEN=${SP_TOKEN:-}
-if [ -z "${SP_TOKEN_FILE:-}" ]; then
-  SP_TOKEN_FILE=$SP_HOME/token
-  if [ ! -r "$SP_TOKEN_FILE" ] && [ -r "$HERE/secrets/token" ]; then
-    SP_TOKEN_FILE=$HERE/secrets/token
+# Where this script really lives. $0 may be a symlink, and is followed by hand because
+# `readlink -f` is missing from older macOS; pwd -P resolves a symlinked directory
+src=$0
+while [ -L "$src" ]; do
+  link=$(readlink "$src")
+  case $link in
+    /*) src=$link ;;
+    *) src=$(dirname "$src")/$link ;;
+  esac
+done
+HERE=$(cd -- "$(dirname -- "$src")" && pwd -P)
+
+# The token and the private notes belong to the user, not to the install. They stay in
+# the skill directory when it already holds them — a clone synced between machines
+# carries them along — and otherwise go to the XDG config directory, because a plugin or
+# `npx skills` update replaces the skill directory whole. The layout is the same in both:
+# secrets/token and user/. The env var wins so one call can hit another instance
+# without touching the file
+if [ -z "${SP_HOME:-}" ]; then
+  if [ -e "$HERE/secrets" ] || [ -e "$HERE/user" ]; then
+    SP_HOME=$HERE
+  else
+    SP_HOME=${XDG_CONFIG_HOME:-$HOME/.config}/super-productivity-skill
   fi
 fi
+SP_TOKEN=${SP_TOKEN:-}
+SP_TOKEN_FILE=${SP_TOKEN_FILE:-$SP_HOME/secrets/token}
 if [ -z "$SP_TOKEN" ] && [ -r "$SP_TOKEN_FILE" ]; then
   SP_TOKEN=$(tr -d '[:space:]' <"$SP_TOKEN_FILE")
 fi
@@ -72,9 +85,10 @@ stats counts leaf tasks. --by day lists the last N days (default 7, today
 included); --by project and --by tag show all-time spent unless --days is given,
 and then only what was spent in that window
 
-Environment: SP_API (default http://127.0.0.1:3876), SP_TOKEN, SP_HOME (default
-$XDG_CONFIG_HOME/super-productivity-skill), SP_TOKEN_FILE (default token in SP_HOME,
-else secrets/token next to this script), SP_TIMEOUT
+Environment: SP_API (default http://127.0.0.1:3876), SP_TOKEN, SP_HOME (default this
+script's directory when it holds secrets/ or user/, else
+$XDG_CONFIG_HOME/super-productivity-skill), SP_TOKEN_FILE (default
+SP_HOME/secrets/token), SP_TIMEOUT
 
 The token comes from Settings -> Misc -> Access Token
 
@@ -216,19 +230,45 @@ resolve_list() {
   printf '%s\n' "${out[@]}" | jq -R . | jq -sc .
 }
 
+# GNU date parses with -d; BSD date, the one macOS ships, adjusts with -v and parses with
+# -j -f. Which one is here is asked once, and every date goes through the helpers below
+if date --version >/dev/null 2>&1; then DATE_GNU=1; else DATE_GNU=0; fi
+
+day_offset() { # day_offset N -> the day N days from today, N may be negative, YYYY-MM-DD
+  if [ "$DATE_GNU" = 1 ]; then date -d "$1 days" +%F; else date -v"$(printf '%+d' "$1")"d +%F; fi
+}
+
+# BSD date rolls 2026-02-30 over into March rather than failing, so a value only counts
+# as a date when formatting it back gives the same text
+is_day() { # is_day YYYY-MM-DD -> 0 when that day exists
+  local got
+  if [ "$DATE_GNU" = 1 ]; then got=$(date -d "$1" +%F 2>/dev/null) || return 1
+  else got=$(date -j -f %Y-%m-%d "$1" +%F 2>/dev/null) || return 1; fi
+  [ "$got" = "$1" ]
+}
+
+epoch_at() { # epoch_at "YYYY-MM-DD HH:MM" -> seconds since the epoch in local time
+  local got
+  # BSD fills the fields a format leaves out from the current time, so seconds are given
+  if [ "$DATE_GNU" = 1 ]; then got=$(date -d "$1" '+%Y-%m-%d %H:%M' 2>/dev/null) || return 1
+  else got=$(date -j -f '%Y-%m-%d %H:%M:%S' "$1:00" '+%Y-%m-%d %H:%M' 2>/dev/null) || return 1; fi
+  [ "$got" = "$1" ] || return 1
+  if [ "$DATE_GNU" = 1 ]; then date -d "$1" +%s; else date -j -f '%Y-%m-%d %H:%M:%S' "$1:00" +%s; fi
+}
+
 parse_due() {
   case $1 in
     today) date +%F ;;
-    tomorrow) date -d tomorrow +%F ;;
-    +[0-9]*d) date -d "${1%d} days" +%F ;;
-    [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) date -d "$1" +%F >/dev/null || die $E_USAGE "bad date: $1"; printf '%s' "$1" ;;
+    tomorrow) day_offset 1 ;;
+    +[0-9]*d) [[ ${1%d} =~ ^\+[0-9]+$ ]] || die $E_USAGE "bad --due value \"$1\""; day_offset "${1%d}" ;;
+    [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) is_day "$1" || die $E_USAGE "bad date: $1"; printf '%s' "$1" ;;
     *) die $E_USAGE "bad --due value \"$1\" — use today, tomorrow, +3d or YYYY-MM-DD" ;;
   esac
 }
 
 parse_at() {
   local secs
-  secs=$(date -d "$1" +%s 2>/dev/null) || die $E_USAGE "bad --at value \"$1\" — use \"YYYY-MM-DD HH:MM\""
+  secs=$(epoch_at "$1") || die $E_USAGE "bad --at value \"$1\" — use \"YYYY-MM-DD HH:MM\""
   printf '%s' "$((secs * 1000))"
 }
 
@@ -387,7 +427,7 @@ cmd_stats() {
   pmap=$(name_map projects) || exit $?
   tmap=$(name_map tags) || exit $?
   # the last N days include today, so the window opens N-1 days back
-  since=$(date -d "$((OPT_DAYS - 1)) days ago" +%F)
+  since=$(day_offset "-$((OPT_DAYS - 1))")
   { [ "$OPT_BY" = day ] || [ "$OPT_DAYS_SET" = 1 ]; } && win=true
   jq -r --arg by "$OPT_BY" --arg since "$since" --argjson days "$OPT_DAYS" --argjson win "$win" \
     --argjson p "$pmap" --argjson t "$tmap" "$JQ_LIB"'
