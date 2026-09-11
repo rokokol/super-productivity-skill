@@ -4,6 +4,13 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 Written after the fact from the repository's history, so the entries below say what each change did rather than reproducing the reasoning; the commit bodies carry that
 
+## 2026-09-11
+
+### Changed
+
+- **exit codes 1 and 2 trade places**: a usage error is 2 and an unreachable app is 1, as bash, grep and the rest of the author's scripts answer them, so an agent that knows that rule no longer reads "the app is not running" as "you called me wrongly". A flag given without its value is refused with 2 and the script's own message, where `${2:?}` had bash exit 1 with its own; `--notes ''` still clears the notes
+- `sp.sh help` names every subcommand as `sp.sh <sub>`, and the flags are parsed at the top level before one `case "$cmd"` dispatcher, so the [bash-best-practices](https://github.com/rokokol/bash-best-practices-skill) skill's `check-sh.sh`, vendored, holds the help to the dispatcher, the flags and the `SP_*` variables the script reads, and holds every `sp.sh …` that `SKILL.md` and `README.md` spell to the same code
+
 ## 2026-09-10
 
 ### Added

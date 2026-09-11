@@ -111,8 +111,8 @@ A task id can open with `-`, since `-` is in the alphabet ids are drawn from. Pa
 
 | Code | Meaning and response |
 | ---: | --- |
-| 1 | Bad usage, including an `SP_API` curl cannot use: follow the command's diagnostic |
-| 2 | App unreachable: ask the user to start the desktop app and enable **Settings → Misc → Enable local REST API** |
+| 1 | App unreachable: ask the user to start the desktop app and enable **Settings → Misc → Enable local REST API** |
+| 2 | Bad usage, including an `SP_API` curl cannot use: follow the command's diagnostic |
 | 3 | Project or tag unresolved: relay the candidates and ask |
 | 4 | API error: relay `code: message` verbatim |
 | 5 | Token missing or rejected: ask the user to write a fresh one with the command in Session setup |

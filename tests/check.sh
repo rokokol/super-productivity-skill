@@ -128,6 +128,14 @@ if [ "$mode" != behaviour ]; then
   # copy on every run
   ./check-skill.sh -n super-productivity .
 
+  echo "== sp.sh's help, and every sp.sh the docs spell, agree with its dispatcher"
+  # The bash-best-practices skill's check-sh.sh, vendored: the subcommands, the flags and
+  # the SP_ variables sp.sh reads must all be in its help, and every `sp.sh …` that
+  # SKILL.md and the readme spell must be a real one. Both send the reader to the help for
+  # the full list, so they are held with -m, which demands no list. It plants its own
+  # defects on every run
+  ./check-sh.sh -e SP_ -m SKILL.md -m README.md sp.sh
+
   echo "== the secret gate is quiet on this repository"
   ./tests/no-secrets.sh
 
@@ -281,14 +289,16 @@ if [ "$mode" != lint ]; then
   sp ./sp.sh set t1 --tag -home >/dev/null
   expect_tags "set --tag -name removes from the set" '[]'
   before=$(wc -l <"$fake/api/requests")
-  expect_rc 1 "set --tag mixing a bare name with +/-" sp ./sp.sh set t1 --tag foo-bar,+home
+  expect_rc 2 "set --tag mixing a bare name with +/-" sp ./sp.sh set t1 --tag foo-bar,+home
   grep -q '^PATCH ' <(tail -n +"$((before + 1))" "$fake/api/requests") &&
     problem "set --tag mixing a bare name with +/- still sent a PATCH"
 
-  expect_rc 1 "list --limit abc" sp ./sp.sh list --limit abc
+  expect_rc 2 "list --limit abc" sp ./sp.sh list --limit abc
   expect_rc 0 "list --limit 1" sp ./sp.sh list --limit 1
-  expect_rc 1 "stats --days abc" sp ./sp.sh stats --days abc
-  expect_rc 1 "stats --days 0" sp ./sp.sh stats --days 0
+  expect_rc 2 "list --limit with no value" sp ./sp.sh list --limit
+  expect_rc 2 "stats --days abc" sp ./sp.sh stats --days abc
+  expect_rc 2 "stats --days 0" sp ./sp.sh stats --days 0
+  expect_rc 0 "set --notes with an empty value clears the notes" sp ./sp.sh set t1 --notes ''
 
   expect_out "stats --by day --days 7 reaches six days back" "^$(day_offset -6) " sp ./sp.sh stats --by day --days 7
   expect_no "stats --by day --days 7 stops short of seven days back" "^$(day_offset -7) " sp ./sp.sh stats --by day --days 7
@@ -296,14 +306,15 @@ if [ "$mode" != lint ]; then
   expect_out "stats --by project --days 1 is today only" '^Notes  1h spent' sp ./sp.sh stats --by project --days 1
   expect_out "stats --by tag --days 1 is today only" '^Home  1h spent' sp ./sp.sh stats --by tag --days 1
 
-  expect_rc 2 "curl cannot connect" sp FAKE_CURL_EXIT=7 ./sp.sh health
-  expect_rc 2 "curl gets an empty reply" sp FAKE_CURL_EXIT=52 ./sp.sh health
-  expect_rc 1 "curl rejects SP_API as a URL" sp FAKE_CURL_EXIT=3 ./sp.sh health
+  expect_rc 1 "curl cannot connect" sp FAKE_CURL_EXIT=7 ./sp.sh health
+  expect_rc 1 "curl gets an empty reply" sp FAKE_CURL_EXIT=52 ./sp.sh health
+  expect_rc 2 "curl rejects SP_API as a URL" sp FAKE_CURL_EXIT=3 ./sp.sh health
   expect_rc 6 "a payload of the wrong shape" sp FAKE_SP="$fake/broken" ./sp.sh list --project Notes
 
   expect_out "projects --json prints the payload" '"title": "Notes"' sp ./sp.sh projects --json
   expect_out "tags --json prints the payload" '"title": "Home"' sp ./sp.sh tags --json
-  expect_out "help lists itself" '^  help ' sp ./sp.sh help
+  expect_out "help lists itself" '^  sp\.sh help ' sp ./sp.sh help
+  expect_rc 2 "an unknown subcommand" sp ./sp.sh bogus
 
   # Task ids are nanoids, whose alphabet has "-" in it, so one can open with a dash. Taken for
   # an unknown flag, it made every command on that task a usage error, while an id copied
@@ -314,8 +325,8 @@ if [ "$mode" != lint ]; then
     problem "set on a dash-led id did not PATCH /tasks/$dash_id"
   expect_rc 0 "get on a dash-led id" sp ./sp.sh get "$dash_id"
   expect_rc 0 "get on a dash-led id after --" sp ./sp.sh get -- "$dash_id"
-  expect_rc 1 "an unknown long flag is still refused" sp ./sp.sh list --bogus
-  expect_rc 1 "an unknown short flag is still refused" sp ./sp.sh list -x
+  expect_rc 2 "an unknown long flag is still refused" sp ./sp.sh list --bogus
+  expect_rc 2 "an unknown short flag is still refused" sp ./sp.sh list -x
 
   # Where the token and the notes live: in the skill directory when it already holds them —
   # a clone synced between machines carries them along — and otherwise in the XDG config
@@ -389,11 +400,11 @@ if [ "$mode" != lint ]; then
     [ "$(due_sent tomorrow)" = "$(day_offset 1)" ] || problem "$kind date: --due tomorrow"
     [ "$(due_sent +3d)" = "$(day_offset 3)" ] || problem "$kind date: --due +3d"
     [ "$(due_sent 2028-02-29)" = 2028-02-29 ] || problem "$kind date: --due on a real leap day"
-    expect_rc 1 "$kind date: --due on a day that does not exist" on_date ./sp.sh add dated --due 2026-02-30
+    expect_rc 2 "$kind date: --due on a day that does not exist" on_date ./sp.sh add dated --due 2026-02-30
     on_date ./sp.sh add dated --at "2026-09-12 10:00" >/dev/null 2>&1 || problem "$kind date: --at failed"
     [ "$(jq -r '.dueWithTime' <<<"$(last_post)")" = "$(($(epoch_at '2026-09-12 10:00') * 1000))" ] ||
       problem "$kind date: --at sent $(last_post)"
-    expect_rc 1 "$kind date: --at on an hour that does not exist" on_date ./sp.sh add dated --at "2026-09-12 25:00"
+    expect_rc 2 "$kind date: --at on an hour that does not exist" on_date ./sp.sh add dated --at "2026-09-12 25:00"
     expect_out "$kind date: stats --by day reaches six days back" "^$(day_offset -6) " \
       on_date ./sp.sh stats --by day --days 7
     expect_no "$kind date: stats --by day stops short of seven days back" "^$(day_offset -7) " \

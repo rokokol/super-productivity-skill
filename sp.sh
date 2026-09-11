@@ -36,8 +36,12 @@ if [ -z "$SP_TOKEN" ] && [ -r "$SP_TOKEN_FILE" ]; then
   SP_TOKEN=$(tr -d '[:space:]' <"$SP_TOKEN_FILE")
 fi
 
-E_USAGE=1
-E_CONN=2
+# 2 for a usage error, as bash, grep and the rest of the author's scripts answer it, so
+# an agent that knows that rule does not read "the app is not running" as "you called me
+# wrongly"; 1 for the app out of reach, the one failure where the thing asked about is
+# simply not there
+E_USAGE=2
+E_CONN=1
 E_NAME=3
 E_API=4
 E_AUTH=5
@@ -47,21 +51,21 @@ usage() {
   cat <<'EOF'
 sp.sh — Super Productivity over its Local REST API
 
-  help                         this text
-  home                         the private directory: token and user/ notes
-  health                       server + renderer status, as JSON
-  current                      currently tracked task, as JSON
-  projects | tags              id and title of every project / tag
-  list   [filters]             tasks, one line each
-  get    <id>                  a single task
-  add    "title" [options]     create a task
-  set    <id> [options]        update a task: any add option but --parent
-  done   <id>...               mark done
-  rm     <id>...               delete (irreversible)
-  start  <id>                  start the timer on a task
-  stop                         stop the timer
-  archive <id>... | restore <id>...
-  stats  [--days N] [--by project|tag|day]
+  sp.sh help                         this text
+  sp.sh home                         the private directory: token and user/ notes
+  sp.sh health                       server + renderer status, as JSON
+  sp.sh current                      currently tracked task, as JSON
+  sp.sh projects | sp.sh tags        id and title of every project / tag
+  sp.sh list   [filters]             tasks, one line each
+  sp.sh get    <id>                  a single task
+  sp.sh add    "title" [options]     create a task
+  sp.sh set    <id> [options]        update a task: any add option but --parent
+  sp.sh done   <id>...               mark done
+  sp.sh rm     <id>...               delete (irreversible)
+  sp.sh start  <id>                  start the timer on a task
+  sp.sh stop                         stop the timer
+  sp.sh archive <id>... | sp.sh restore <id>...
+  sp.sh stats  [--days N] [--by project|tag|day]
 
 Filters for list:
   --project P   --tag T   --query TEXT   --today   --done   --all
@@ -310,41 +314,10 @@ OPT_TODAY=0 OPT_DONE_FILTER=0 OPT_ALL=0 OPT_MARK=''
 POS=()
 HAS_NOTES=0
 
-parse_flags() {
-  while [ $# -gt 0 ]; do
-    case $1 in
-      --json) OPT_JSON=1 ;;
-      --project) OPT_PROJECT=${2:?--project needs a value}; shift ;;
-      --tag) OPT_TAG=${2:?--tag needs a value}; shift ;;
-      --due) OPT_DUE=${2:?--due needs a value}; shift ;;
-      --at) OPT_AT=${2:?--at needs a value}; shift ;;
-      --est) OPT_EST=${2:?--est needs a value}; shift ;;
-      --notes) OPT_NOTES=${2?--notes needs a value}; HAS_NOTES=1; shift ;;
-      --title) OPT_TITLE=${2:?--title needs a value}; shift ;;
-      --parent) OPT_PARENT=${2:?--parent needs a value}; shift ;;
-      --query) OPT_QUERY=${2:?--query needs a value}; shift ;;
-      --source) OPT_SOURCE=${2:?--source needs a value}; shift ;;
-      --limit)
-        OPT_LIMIT=${2:?--limit needs a value}; shift
-        [[ $OPT_LIMIT =~ ^[0-9]+$ ]] || die $E_USAGE "--limit takes a whole number, not \"$OPT_LIMIT\"" ;;
-      --days)
-        OPT_DAYS=${2:?--days needs a value}; OPT_DAYS_SET=1; shift
-        [[ $OPT_DAYS =~ ^[1-9][0-9]*$ ]] || die $E_USAGE "--days takes a whole number of days from 1, not \"$OPT_DAYS\"" ;;
-      --by) OPT_BY=${2:?--by needs a value}; shift ;;
-      --today) OPT_TODAY=1 ;;
-      --done) OPT_DONE_FILTER=1; OPT_MARK=true ;;
-      --undone) OPT_MARK=false ;;
-      --all) OPT_ALL=1 ;;
-      --) shift; POS+=("$@"); return ;;
-      # A task id is a nanoid and "-" is in its alphabet, so an id can open with one: a word
-      # of an id's shape is an id rather than an unknown flag, and `--` works before any
-      -*)
-        [[ $1 =~ ^-[A-Za-z0-9_-]{20}$ ]] || { usage >&2; die $E_USAGE "unknown flag: $1 — a task id that opens with - can also go after --"; }
-        POS+=("$1") ;;
-      *) POS+=("$1") ;;
-    esac
-    shift
-  done
+# value FLAG ARGS... -> refuses a flag given without the value it takes. Not ${2:?}: that
+# exits 1 with bash's own message, and a usage error is 2
+value() {
+  if [ $# -lt 2 ] || [ -z "$2" ]; then die $E_USAGE "$1 needs a value"; fi
 }
 
 # TODAY is a virtual tag: SP derives it from dueDay, no task ever stores it
@@ -468,86 +441,120 @@ cmd_stats() {
      else empty end)' <<<"$data"
 }
 
-main() {
-  [ $# -gt 0 ] || { usage; exit 0; }
-  local cmd=$1 tag_ids='' cur='' add_ids='' del_ids='' id='' title='' item
-  local -a items=() plus=() minus=() bare=()
-  shift
-  parse_flags "$@"
+# The subcommand, then every flag and word after it. The flags are global — each
+# subcommand reads the ones it cares about — so they are parsed once, here at the top
+# level, where the bash-best-practices skill's check-sh.sh holds them to the help
+[ $# -gt 0 ] || { usage; exit 0; }
+cmd=$1
+shift
+tag_ids='' cur='' add_ids='' del_ids='' id='' title='' item=''
+items=() plus=() minus=() bare=()
 
-  case $cmd in
-    help | -h | --help) usage ;;
-    home) printf '%s\n' "$SP_HOME" ;;
-    health) api GET /health | jq . ;;
-    current) api GET /status | jq . ;;
-    projects | tags)
-      if [ "$OPT_JSON" = 1 ]; then catalog "$cmd" | jq .
-      else catalog "$cmd" | jq -r '.[] | "\(.id)\t\(.title)"'; fi ;;
-    list) cmd_list ;;
-    get)
-      [ ${#POS[@]} -ge 1 ] || die $E_USAGE "get needs a task id"
-      api GET "/tasks/${POS[0]}" | fmt ;;
-    add)
-      [ ${#POS[@]} -ge 1 ] || die $E_USAGE "add needs a title"
-      OPT_TITLE=${POS[0]}
-      build_body
-      if [ -n "$OPT_TAG" ]; then
-        tag_ids=$(resolve_list tags "$OPT_TAG") || exit $?
-        body_set tagIds "$tag_ids"
-      fi
-      api POST /tasks "$BODY" | fmt ;;
-    set)
-      [ ${#POS[@]} -ge 1 ] || die $E_USAGE "set needs a task id"
-      [ -n "$OPT_PARENT" ] && die $E_USAGE "the API cannot re-parent a task — delete and recreate it"
-      build_body
-      if [ -n "$OPT_TAG" ]; then
-        # only an item's first character decides its role — a hyphen inside a name
-        # such as foo-bar is part of the name
-        IFS=, read -ra items <<<"$OPT_TAG"
-        for item in ${items[@]+"${items[@]}"}; do
-          case $item in
-            +*) plus+=("${item#+}") ;;
-            -*) minus+=("${item#-}") ;;
-            ?*) bare+=("$item") ;;
-          esac
-        done
-        if [ ${#plus[@]} -gt 0 ] || [ ${#minus[@]} -gt 0 ]; then
-          [ ${#bare[@]} -eq 0 ] ||
-            die $E_USAGE "--tag either replaces the set (a,b) or edits it (+a,-b) — \"$OPT_TAG\" mixes both"
-          # a bare --tag replaces the whole array, so +x/-y merge against the current one
-          cur=$(api GET "/tasks/${POS[0]}" | jq -c '.tagIds // []') || exit $?
-          add_ids=$(resolve_list tags "$(IFS=,; printf '%s' "${plus[*]+${plus[*]}}")") || exit $?
-          del_ids=$(resolve_list tags "$(IFS=,; printf '%s' "${minus[*]+${minus[*]}}")") || exit $?
-          tag_ids=$(jq -c --argjson a "$add_ids" --argjson d "$del_ids" '. + $a - $d | unique' <<<"$cur")
-        else
-          tag_ids=$(resolve_list tags "$OPT_TAG") || exit $?
-        fi
-        body_set tagIds "$tag_ids"
-      fi
-      [ "$BODY" = '{}' ] && die $E_USAGE "set needs at least one option to change"
-      api PATCH "/tasks/${POS[0]}" "$BODY" | fmt ;;
-    done)
-      [ ${#POS[@]} -ge 1 ] || die $E_USAGE "done needs a task id"
-      for id in "${POS[@]}"; do api PATCH "/tasks/$id" '{"isDone":true}' | fmt; done ;;
-    rm)
-      [ ${#POS[@]} -ge 1 ] || die $E_USAGE "rm needs a task id"
-      for id in "${POS[@]}"; do
-
-        title=$(api GET "/tasks/$id" | jq -r '.title') || exit $?
-        api DELETE "/tasks/$id" >/dev/null
-        printf 'deleted: %s  %s\n' "$id" "$title"
-      done ;;
-    start)
-      [ ${#POS[@]} -ge 1 ] || die $E_USAGE "start needs a task id"
-      api POST "/tasks/${POS[0]}/start" >/dev/null
-      api GET /status | jq . ;;
-    stop) api POST /task-control/stop | jq . ;;
-    archive | restore)
-      [ ${#POS[@]} -ge 1 ] || die $E_USAGE "$cmd needs a task id"
-      for id in "${POS[@]}"; do api POST "/tasks/$id/$cmd" >/dev/null && printf '%sd: %s\n' "$cmd" "$id"; done ;;
-    stats) cmd_stats ;;
-    *) usage >&2; die $E_USAGE "unknown command: $cmd" ;;
+while [ $# -gt 0 ]; do
+  case $1 in
+    --json) OPT_JSON=1 ;;
+    --project) value "$@"; OPT_PROJECT=$2; shift ;;
+    --tag) value "$@"; OPT_TAG=$2; shift ;;
+    --due) value "$@"; OPT_DUE=$2; shift ;;
+    --at) value "$@"; OPT_AT=$2; shift ;;
+    --est) value "$@"; OPT_EST=$2; shift ;;
+    # the one flag an empty value is legitimate for: it clears the notes
+    --notes) [ $# -ge 2 ] || die $E_USAGE "--notes needs a value"; OPT_NOTES=$2; HAS_NOTES=1; shift ;;
+    --title) value "$@"; OPT_TITLE=$2; shift ;;
+    --parent) value "$@"; OPT_PARENT=$2; shift ;;
+    --query) value "$@"; OPT_QUERY=$2; shift ;;
+    --source) value "$@"; OPT_SOURCE=$2; shift ;;
+    --limit)
+      value "$@"; OPT_LIMIT=$2; shift
+      [[ $OPT_LIMIT =~ ^[0-9]+$ ]] || die $E_USAGE "--limit takes a whole number, not \"$OPT_LIMIT\"" ;;
+    --days)
+      value "$@"; OPT_DAYS=$2; OPT_DAYS_SET=1; shift
+      [[ $OPT_DAYS =~ ^[1-9][0-9]*$ ]] || die $E_USAGE "--days takes a whole number of days from 1, not \"$OPT_DAYS\"" ;;
+    --by) value "$@"; OPT_BY=$2; shift ;;
+    --today) OPT_TODAY=1 ;;
+    --done) OPT_DONE_FILTER=1; OPT_MARK=true ;;
+    --undone) OPT_MARK=false ;;
+    --all) OPT_ALL=1 ;;
+    --) shift; POS+=("$@"); break ;;
+    # A task id is a nanoid and "-" is in its alphabet, so an id can open with one: a word
+    # of an id's shape is an id rather than an unknown flag, and `--` works before any
+    -*)
+      [[ $1 =~ ^-[A-Za-z0-9_-]{20}$ ]] || { usage >&2; die $E_USAGE "unknown flag: $1 — a task id that opens with - can also go after --"; }
+      POS+=("$1") ;;
+    *) POS+=("$1") ;;
   esac
-}
+  shift
+done
 
-main "$@"
+case "$cmd" in
+  -h | --help | help) usage ;;
+  home) printf '%s\n' "$SP_HOME" ;;
+  health) api GET /health | jq . ;;
+  current) api GET /status | jq . ;;
+  projects | tags)
+    if [ "$OPT_JSON" = 1 ]; then catalog "$cmd" | jq .
+    else catalog "$cmd" | jq -r '.[] | "\(.id)\t\(.title)"'; fi ;;
+  list) cmd_list ;;
+  get)
+    [ ${#POS[@]} -ge 1 ] || die $E_USAGE "get needs a task id"
+    api GET "/tasks/${POS[0]}" | fmt ;;
+  add)
+    [ ${#POS[@]} -ge 1 ] || die $E_USAGE "add needs a title"
+    OPT_TITLE=${POS[0]}
+    build_body
+    if [ -n "$OPT_TAG" ]; then
+      tag_ids=$(resolve_list tags "$OPT_TAG") || exit $?
+      body_set tagIds "$tag_ids"
+    fi
+    api POST /tasks "$BODY" | fmt ;;
+  set)
+    [ ${#POS[@]} -ge 1 ] || die $E_USAGE "set needs a task id"
+    [ -n "$OPT_PARENT" ] && die $E_USAGE "the API cannot re-parent a task — delete and recreate it"
+    build_body
+    if [ -n "$OPT_TAG" ]; then
+      # only an item's first character decides its role — a hyphen inside a name
+      # such as foo-bar is part of the name
+      IFS=, read -ra items <<<"$OPT_TAG"
+      for item in ${items[@]+"${items[@]}"}; do
+        case $item in
+          +*) plus+=("${item#+}") ;;
+          -*) minus+=("${item#-}") ;;
+          ?*) bare+=("$item") ;;
+        esac
+      done
+      if [ ${#plus[@]} -gt 0 ] || [ ${#minus[@]} -gt 0 ]; then
+        [ ${#bare[@]} -eq 0 ] ||
+          die $E_USAGE "--tag either replaces the set (a,b) or edits it (+a,-b) — \"$OPT_TAG\" mixes both"
+        # a bare --tag replaces the whole array, so +x/-y merge against the current one
+        cur=$(api GET "/tasks/${POS[0]}" | jq -c '.tagIds // []') || exit $?
+        add_ids=$(resolve_list tags "$(IFS=,; printf '%s' "${plus[*]+${plus[*]}}")") || exit $?
+        del_ids=$(resolve_list tags "$(IFS=,; printf '%s' "${minus[*]+${minus[*]}}")") || exit $?
+        tag_ids=$(jq -c --argjson a "$add_ids" --argjson d "$del_ids" '. + $a - $d | unique' <<<"$cur")
+      else
+        tag_ids=$(resolve_list tags "$OPT_TAG") || exit $?
+      fi
+      body_set tagIds "$tag_ids"
+    fi
+    [ "$BODY" = '{}' ] && die $E_USAGE "set needs at least one option to change"
+    api PATCH "/tasks/${POS[0]}" "$BODY" | fmt ;;
+  done)
+    [ ${#POS[@]} -ge 1 ] || die $E_USAGE "done needs a task id"
+    for id in "${POS[@]}"; do api PATCH "/tasks/$id" '{"isDone":true}' | fmt; done ;;
+  rm)
+    [ ${#POS[@]} -ge 1 ] || die $E_USAGE "rm needs a task id"
+    for id in "${POS[@]}"; do
+      title=$(api GET "/tasks/$id" | jq -r '.title') || exit $?
+      api DELETE "/tasks/$id" >/dev/null
+      printf 'deleted: %s  %s\n' "$id" "$title"
+    done ;;
+  start)
+    [ ${#POS[@]} -ge 1 ] || die $E_USAGE "start needs a task id"
+    api POST "/tasks/${POS[0]}/start" >/dev/null
+    api GET /status | jq . ;;
+  stop) api POST /task-control/stop | jq . ;;
+  archive | restore)
+    [ ${#POS[@]} -ge 1 ] || die $E_USAGE "$cmd needs a task id"
+    for id in "${POS[@]}"; do api POST "/tasks/$id/$cmd" >/dev/null && printf '%sd: %s\n' "$cmd" "$id"; done ;;
+  stats) cmd_stats ;;
+  *) usage >&2; die $E_USAGE "unknown command: $cmd" ;;
+esac
