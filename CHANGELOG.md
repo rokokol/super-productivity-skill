@@ -6,6 +6,10 @@ Written after the fact from the repository's history, so the entries below say w
 
 ## 2026-09-11
 
+### Added
+
+- the gate holds every API field the docs name — a code span that is wholly a camelCase word, `timeEstimate`, `backlogTaskIds` — to the fields Super Productivity itself declares, through the [ci](https://github.com/rokokol/ci-skill) skill's `check-interface.sh`, vendored, so a field the app renames stops the docs teaching it. The app is not on a runner, so the declaration is recorded in `tests/sp-fields.txt`, printed by `tests/sp-fields.sh` from the `Task`, `TaskCopy` and `Project` interfaces in 18.21.2's `app.asar`, and compared with an installed app when `SP_ASAR` points at one
+
 ### Changed
 
 - **exit codes 1 and 2 trade places**: a usage error is 2 and an unreachable app is 1, as bash, grep and the rest of the author's scripts answer them, so an agent that knows that rule no longer reads "the app is not running" as "you called me wrongly". A flag given without its value is refused with 2 and the script's own message, where `${2:?}` had bash exit 1 with its own; `--notes ''` still clears the notes

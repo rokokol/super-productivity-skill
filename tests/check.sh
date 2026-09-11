@@ -136,6 +136,23 @@ if [ "$mode" != behaviour ]; then
   # defects on every run
   ./check-sh.sh -e SP_ -m SKILL.md -m README.md sp.sh
 
+  echo "== every API field the docs name is one Super Productivity declares"
+  # The docs teach the API's own field names — a parent's derived timeEstimate, the backlog
+  # as a project's backlogTaskIds — and a rename in the app would leave them teaching a field
+  # that is gone. The app is not on a runner, so the gate reads tests/sp-fields.txt, what
+  # tests/sp-fields.sh printed from one version's app.asar; with SP_ASAR pointing at an
+  # installed app.asar the recording is first held to it, so the day the app moves the gate
+  # says the recording is stale
+  if [ -n "${SP_ASAR:-}" ]; then
+    tests/sp-fields.sh "$SP_ASAR" | diff tests/sp-fields.txt - >"$work/fields.diff" ||
+      fail "tests/sp-fields.txt is not what $SP_ASAR declares; regenerate it with: tests/sp-fields.sh \"\$SP_ASAR\" >tests/sp-fields.txt"$'\n'"$(head -n 20 "$work/fields.diff")"
+  else
+    echo "   against the recording of $(head -n 1 tests/sp-fields.txt | cut -d' ' -f2 | tr -d :); set SP_ASAR to hold it to an installed app"
+  fi
+  # The ci skill's check-interface.sh, vendored: a code span that is wholly a camelCase word
+  # is a field the docs claim, and it plants its own defects on every run
+  ./check-interface.sh -d tests/sp-fields.txt -s '[a-z]+[A-Z][A-Za-z]*' SKILL.md README.md
+
   echo "== the secret gate is quiet on this repository"
   ./tests/no-secrets.sh
 
