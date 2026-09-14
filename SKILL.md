@@ -65,7 +65,7 @@ user/
 - A complete audit requires `list --all --source all --json`; ordinary `list` omits done and archived tasks
 - A parent's `timeEstimate` is derived, not kept: the app overwrites it with the sum of its subtasks' remaining estimates whenever a subtask's estimate or done state changes or a subtask is deleted. Estimate the subtasks of a decomposed task, never the parent as well; an estimate written to the parent lasts only until the next such change
 - Deleting a parent's last subtask copies that subtask's time spent and estimate onto the parent. When flattening a tree, delete the subtask that carries tracked time last, or that time leaves `stats`
-- Notes are markdown. Since Super Productivity 18.10 `- [ ]` and `- [x]` lines render as a clickable checklist with a done/total badge on the task, provided the note has at least two of them or nothing else; through the API they stay plain text in `notes`
+- Notes are markdown. `- [ ]` and `- [x]` lines render as a clickable checklist with a done/total badge on the task, provided the note has at least two of them or nothing else; through the API they stay plain text in `notes`
 
 ## Safe writes
 
