@@ -250,6 +250,12 @@ if [ "$mode" != lint ]; then
 }, {
   id: "-3PluTV--NWbvqa0eL_VM", title: "An id that opens with a dash", projectId: "INBOX_PROJECT",
   tagIds: [], isDone: false, timeSpent: 0, timeEstimate: 0, subTaskIds: []
+}, {
+  id: "parent", title: "Parent", projectId: "p-notes", tagIds: [], isDone: false,
+  timeSpent: 0, timeEstimate: 0, subTaskIds: ["child"]
+}, {
+  id: "child", title: "Child", parentId: "parent", projectId: "p-notes", tagIds: [],
+  isDone: false, timeSpent: 0, timeEstimate: 0, subTaskIds: []
 }]' >"$fake/api/tasks.json"
   # the same API with a projects payload of the wrong shape, for the internal-failure code
   cp "$fake/api"/*.json "$fake/broken/"
@@ -301,10 +307,10 @@ if [ "$mode" != lint ]; then
 
   sp ./sp.sh set t1 --tag foo-bar >/dev/null
   expect_tags "set --tag with a hyphen in the name replaces the set" '["t-foobar"]'
-  sp ./sp.sh set t1 --tag +foo-bar >/dev/null
+  sp ./sp.sh set t1 --tag +home >/dev/null
   expect_tags "set --tag +name adds to the set" '["t-home","t-foobar"]'
-  sp ./sp.sh set t1 --tag -home >/dev/null
-  expect_tags "set --tag -name removes from the set" '[]'
+  sp ./sp.sh set t1 --tag -foo-bar >/dev/null
+  expect_tags "set --tag -name removes from the set" '["t-home"]'
   before=$(wc -l <"$fake/api/requests")
   expect_rc 2 "set --tag mixing a bare name with +/-" sp ./sp.sh set t1 --tag foo-bar,+home
   grep -q '^PATCH ' <(tail -n +"$((before + 1))" "$fake/api/requests") &&
@@ -316,6 +322,34 @@ if [ "$mode" != lint ]; then
   expect_rc 2 "stats --days abc" sp ./sp.sh stats --days abc
   expect_rc 2 "stats --days 0" sp ./sp.sh stats --days 0
   expect_rc 0 "set --notes with an empty value clears the notes" sp ./sp.sh set t1 --notes ''
+
+  before=$(wc -l <"$fake/api/requests")
+  sp ./sp.sh set t1 --notes saved >/dev/null 2>&1 || problem "set failed while verifying a persisted field"
+  tail -n +"$((before + 1))" "$fake/api/requests" | grep -qE '^GET /tasks/t1 ' ||
+    problem "set did not read the task back after PATCH"
+  expect_rc 7 "set detects a field silently discarded after an optimistic response" \
+    sp FAKE_SP_DISCARD_FIELD=notes ./sp.sh set t1 --notes discarded
+
+  before=$(wc -l <"$fake/api/requests")
+  sp ./sp.sh add verified >/dev/null 2>&1 || problem "add failed while verifying a persisted task"
+  created_id=$(tail -n +"$((before + 1))" "$fake/api/requests" | grep '^GET /tasks/' | tail -n1 | cut -d' ' -f2)
+  [ -n "$created_id" ] || problem "add did not read the new task back after POST"
+
+  expect_rc 0 "archive verifies isArchived" sp ./sp.sh archive t1
+  expect_rc 0 "restore verifies isArchived" sp ./sp.sh restore t1
+  expect_rc 7 "archive detects a task left active after an optimistic response" \
+    sp FAKE_SP_SKIP_ARCHIVE=1 ./sp.sh archive t1
+
+  expect_rc 0 "moving a parent verifies its descendants" sp ./sp.sh set parent --project INBOX_PROJECT
+  sp ./sp.sh set parent --project Notes >/dev/null
+  expect_rc 7 "moving a parent detects a child left in the old project" \
+    sp FAKE_SP_SKIP_CASCADE=1 ./sp.sh set parent --project INBOX_PROJECT
+
+  disposable=$(sp ./sp.sh add disposable --json | jq -r '.id')
+  expect_rc 0 "rm verifies that the task disappeared" sp ./sp.sh rm "$disposable"
+  stubborn=$(sp ./sp.sh add stubborn --json | jq -r '.id')
+  expect_rc 7 "rm detects a task left behind after an optimistic response" \
+    sp FAKE_SP_SKIP_DELETE=1 ./sp.sh rm "$stubborn"
 
   expect_out "stats --by day --days 7 reaches six days back" "^$(day_offset -6) " sp ./sp.sh stats --by day --days 7
   expect_no "stats --by day --days 7 stops short of seven days back" "^$(day_offset -7) " sp ./sp.sh stats --by day --days 7

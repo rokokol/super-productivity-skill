@@ -8,6 +8,8 @@
 # assert what sp.sh sent, and the bearer token of the last request is written to
 # $FAKE_SP/auth. FAKE_CURL_EXIT=N makes the call fail the way curl does, with exit
 # status N and no output
+# FAKE_SP_DISCARD_FIELD names one field that a write silently drops while still returning
+# the optimistic response, reproducing the real API's allow-list behaviour
 set -euo pipefail
 
 [ -z "${FAKE_CURL_EXIT:-}" ] || exit "$FAKE_CURL_EXIT"
@@ -48,6 +50,25 @@ ok() { reply 200 "$(jq -c '{ok: true, data: .}')"; }
 missing() { reply 404 '{"ok":false,"error":{"code":"NOT_FOUND","message":"no such route or task"}}'; }
 
 task() { jq -c --arg id "$1" '.[] | select(.id == $id)' "$FAKE_SP/tasks.json"; }
+stored_body() {
+  if [ -n "${FAKE_SP_DISCARD_FIELD:-}" ]; then
+    jq -c --arg field "$FAKE_SP_DISCARD_FIELD" 'del(.[$field])' <<<"$body"
+  else
+    printf '%s' "$body"
+  fi
+}
+store_task() { # store_task TASK — replace TASK by id, or append it
+  local value=$1 tmp
+  tmp=$(mktemp "$FAKE_SP/tasks.XXXXXX")
+  jq -c --argjson value "$value" 'map(select(.id != $value.id)) + [$value]' "$FAKE_SP/tasks.json" >"$tmp"
+  mv "$tmp" "$FAKE_SP/tasks.json"
+}
+delete_task() {
+  local id=$1 tmp
+  tmp=$(mktemp "$FAKE_SP/tasks.XXXXXX")
+  jq -c --arg id "$id" 'map(select(.id != $id))' "$FAKE_SP/tasks.json" >"$tmp"
+  mv "$tmp" "$FAKE_SP/tasks.json"
+}
 
 case "$method $route" in
   "GET /health") ok <<<'{"server":"up","rendererReady":true}' ;;
@@ -60,8 +81,60 @@ case "$method $route" in
     ;;
   "PATCH /tasks/"*)
     found=$(task "${route#/tasks/}")
-    if [ -n "$found" ]; then jq -c --argjson b "$body" '. + $b' <<<"$found" | ok; else missing; fi
+    if [ -n "$found" ]; then
+      optimistic=$(jq -c --argjson b "$body" '. + $b' <<<"$found")
+      saved=$(jq -c --argjson b "$(stored_body)" '. + $b' <<<"$found")
+      store_task "$saved"
+      if [ -z "${FAKE_SP_SKIP_CASCADE:-}" ] && jq -e 'has("projectId")' <<<"$body" >/dev/null; then
+        while IFS= read -r child; do
+          store_task "$(jq -c --argjson b "$body" '. + {projectId: $b.projectId}' <<<"$child")"
+        done < <(jq -c --arg id "${route#/tasks/}" '.[] | select(.parentId == $id)' "$FAKE_SP/tasks.json")
+      fi
+      ok <<<"$optimistic"
+    else
+      missing
+    fi
     ;;
-  "POST /tasks") jq -c '{id: "new"} + .' <<<"$body" | ok ;;
+  "POST /tasks")
+    created=$(jq -c --arg id "new-$(jq 'length + 1' "$FAKE_SP/tasks.json")" '{id: $id} + .' <<<"$(stored_body)")
+    store_task "$created"
+    jq -c --argjson saved "$created" '$saved + .' <<<"$body" | ok
+    ;;
+  "POST /tasks/"*/archive)
+    id=${route#/tasks/}
+    id=${id%/archive}
+    found=$(task "$id")
+    if [ -n "$found" ]; then
+      [ -n "${FAKE_SP_SKIP_ARCHIVE:-}" ] || {
+        saved=$(jq -c '.isArchived = true' <<<"$found")
+        store_task "$saved"
+      }
+      ok <<<"$found"
+    else
+      missing
+    fi
+    ;;
+  "POST /tasks/"*/restore)
+    id=${route#/tasks/}
+    id=${id%/restore}
+    found=$(task "$id")
+    if [ -n "$found" ]; then
+      saved=$(jq -c '.isArchived = false' <<<"$found")
+      store_task "$saved"
+      ok <<<"$found"
+    else
+      missing
+    fi
+    ;;
+  "DELETE /tasks/"*)
+    id=${route#/tasks/}
+    found=$(task "$id")
+    if [ -n "$found" ]; then
+      [ -n "${FAKE_SP_SKIP_DELETE:-}" ] || delete_task "$id"
+      ok <<<'null'
+    else
+      missing
+    fi
+    ;;
   *) missing ;;
 esac

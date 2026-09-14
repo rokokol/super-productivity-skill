@@ -28,10 +28,9 @@ Never place the token in a command line, task, note, example, or tracked file, a
 2. Inspect live state with `list`, `get`, `projects`, or `tags`; read-only calls need no confirmation
 3. Resolve human project and tag names through `sp.sh`; never invent an id
 4. Perform the smallest requested mutation
-5. Read the changed state back before reporting success; an HTTP `200` alone proves nothing
-6. Update private context only when the user supplied a durable preference or convention
+5. Update private context only when the user supplied a durable preference or convention
 
-For `set`, `done`, `archive`, `restore`, or `rm`, read the target first so its id and current state are known. Capture a newly created id with `add --json` and `.id`
+For `set`, `done`, `archive`, `restore`, or `rm`, read the target first so its id and current state are known
 
 ## Private context
 
@@ -69,8 +68,8 @@ user/
 
 ## Safe writes
 
-- Every write goes through an API allow-list. Unsupported fields can be discarded while the API still returns `ok: true`, so read back the exact fields that should have changed
-- Moving a parent to another project cascades to its subtasks. Inspect the complete tree first, then verify the `projectId` of the parent and every child
+- Every task mutation independently reads and verifies its result before exiting. Exit 0 is the verification; never follow it with a manual `get` or `list`
+- Moving a parent to another project cascades to its subtasks. Inspect the complete tree before deciding to move it; `sp.sh` verifies the resulting project of the whole tree
 - Prefer `done` or `archive` over deletion. Confirm `rm` with the user because it is irreversible
 
 ## API limits
@@ -117,3 +116,4 @@ A task id can open with `-`, since `-` is in the alphabet ids are drawn from. Pa
 | 4 | API error: relay `code: message` verbatim |
 | 5 | Token missing or rejected: ask the user to write a fresh one with the command in Session setup |
 | 6 | Data of an unexpected shape, or a bug in `sp.sh`: relay the message and stop rather than retrying with guessed arguments |
+| 7 | A task mutation was not visible when read back: relay the field mismatch; do not report success or repeat the write |

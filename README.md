@@ -60,7 +60,7 @@ git clone https://github.com/rokokol/super-productivity-skill \
 
 ## What it does
 
-Lists, creates, edits, schedules, completes, archives and deletes tasks, runs the built-in timer, and reports where the time went by project, tag or day. `./sp.sh help` is the complete command and flag reference — it is printed by the script itself, so it cannot drift from what the script accepts
+Lists, creates, edits, schedules, completes, archives and deletes tasks, runs the built-in timer, and reports where the time went by project, tag or day. Every task mutation independently reads the resulting state back before it exits successfully, so a nominally successful API response cannot hide a discarded field. `./sp.sh help` is the complete command and flag reference — it is printed by the script itself, so it cannot drift from what the script accepts
 
 Projects and tags are passed by **name**, not id — resolution is case-insensitive, accepts a unique substring, and folds Cyrillic ё/е, so `--project note --tag hob,craft` hits "Notes" tagged "Hobby" and "Craft". An unknown or ambiguous name exits non-zero with the candidate list instead of guessing
 

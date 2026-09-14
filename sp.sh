@@ -46,6 +46,7 @@ E_NAME=3
 E_API=4
 E_AUTH=5
 E_DATA=6
+E_VERIFY=7
 
 usage() {
   cat <<'EOF'
@@ -85,6 +86,8 @@ Options for add / set:
 --json prints the raw API payload instead of the one-line format, for list, get,
 add, set, done, projects and tags; health and current print JSON anyway
 
+Task mutations read the resulting state independently before they exit successfully
+
 A task id may open with "-": pass it as it is, or after --, which ends the options
 (sp.sh set --est 2h -- <id>)
 
@@ -99,7 +102,8 @@ SP_HOME/secrets/token), SP_TIMEOUT
 
 The token comes from Settings -> Misc -> Access Token
 
-Exit codes and what the API cannot do: SKILL.md beside this script
+Exit codes, including write verification failure, and what the API cannot do:
+SKILL.md beside this script
 EOF
 }
 
@@ -177,6 +181,58 @@ copy it from Settings -> Misc -> Access Token into $SP_TOKEN_FILE (chmod 600)"
     die $E_API "$(jq -r '"\(.error.code // "ERROR"): \(.error.message // "request failed")"' <<<"$json")"
   fi
   jq -c '.data' <<<"$json"
+}
+
+verify_fields() { # verify_fields ID EXPECTED ACTUAL -> ACTUAL, once every expected field matches
+  local id=$1 expected=$2 actual=$3 differences
+  differences=$(jq -c --argjson want "$expected" '
+    . as $got | [$want | to_entries[] |
+      select(if .key == "tagIds"
+        then ((.value // []) | sort) != (($got[.key] // []) | sort)
+        else .value != $got[.key]
+        end) |
+      {field: .key, expected: .value, actual: $got[.key]}]' <<<"$actual") || exit $?
+  [ "$differences" = '[]' ] ||
+    die $E_VERIFY "write verification failed for task $id: $differences"
+  printf '%s' "$actual"
+}
+
+verify_task() { # verify_task ID EXPECTED -> the independently read task
+  local id=$1 expected=$2 actual
+  actual=$(api GET "/tasks/$id") || exit $?
+  verify_fields "$id" "$expected" "$actual"
+}
+
+verify_task_in_all() { # archived tasks may be absent from the direct active-task route
+  local id=$1 expected=$2 actual
+  actual=$(api GET '/tasks?includeDone=true&source=all' | jq -c --arg id "$id" '.[] | select(.id == $id)') || exit $?
+  [ -n "$actual" ] || die $E_VERIFY "write verification failed: task $id disappeared"
+  verify_fields "$id" "$expected" "$actual"
+}
+
+project_tree_ids() { # project_tree_ids ROOT -> ROOT and every descendant in the complete task set
+  local root=$1
+  api GET '/tasks?includeDone=true&source=all' | jq -c --arg root "$root" '
+    . as $tasks |
+    def descendants($id):
+      [$tasks[] | select((.parentId // null) == $id) | .id] as $children |
+      $children + [$children[] as $child | descendants($child)[]];
+    [$root] + descendants($root)'
+}
+
+verify_project_tree() {
+  local ids=$1 project=$2 wrong
+  wrong=$(api GET '/tasks?includeDone=true&source=all' | jq -c --argjson ids "$ids" --arg project "$project" '
+    map({key: .id, value: (.projectId // "INBOX_PROJECT")}) | from_entries as $projects |
+    [$ids[] | select($projects[.] != $project)]') || exit $?
+  [ "$wrong" = '[]' ] ||
+    die $E_VERIFY "write verification failed: project $project did not reach task ids $wrong"
+}
+
+verify_absent() {
+  local id=$1 found
+  found=$(api GET '/tasks?includeDone=true&source=all' | jq -c --arg id "$id" '[.[] | select(.id == $id) | .id]') || exit $?
+  [ "$found" = '[]' ] || die $E_VERIFY "delete verification failed: task $id is still present"
 }
 
 # one fetch per process, both catalogs are needed to print any task line
@@ -447,7 +503,7 @@ cmd_stats() {
 [ $# -gt 0 ] || { usage; exit 0; }
 cmd=$1
 shift
-tag_ids='' cur='' add_ids='' del_ids='' id='' title='' item=''
+tag_ids='' cur='' add_ids='' del_ids='' id='' title='' item='' tree_ids='' project_id=''
 items=() plus=() minus=() bare=()
 
 while [ $# -gt 0 ]; do
@@ -506,7 +562,10 @@ case "$cmd" in
       tag_ids=$(resolve_list tags "$OPT_TAG") || exit $?
       body_set tagIds "$tag_ids"
     fi
-    api POST /tasks "$BODY" | fmt ;;
+    created=$(api POST /tasks "$BODY") || exit $?
+    id=$(jq -er '.id | select(type == "string" and length > 0)' <<<"$created") ||
+      die $E_DATA "creating a task returned no task id"
+    verify_task "$id" "$BODY" | fmt ;;
   set)
     [ ${#POS[@]} -ge 1 ] || die $E_USAGE "set needs a task id"
     [ -n "$OPT_PARENT" ] && die $E_USAGE "the API cannot re-parent a task — delete and recreate it"
@@ -536,15 +595,25 @@ case "$cmd" in
       body_set tagIds "$tag_ids"
     fi
     [ "$BODY" = '{}' ] && die $E_USAGE "set needs at least one option to change"
-    api PATCH "/tasks/${POS[0]}" "$BODY" | fmt ;;
+    if project_id=$(jq -er '.projectId // empty' <<<"$BODY"); then
+      tree_ids=$(project_tree_ids "${POS[0]}") || exit $?
+    fi
+    api PATCH "/tasks/${POS[0]}" "$BODY" >/dev/null
+    verified=$(verify_task "${POS[0]}" "$BODY") || exit $?
+    [ -z "$tree_ids" ] || verify_project_tree "$tree_ids" "$project_id"
+    printf '%s' "$verified" | fmt ;;
   done)
     [ ${#POS[@]} -ge 1 ] || die $E_USAGE "done needs a task id"
-    for id in "${POS[@]}"; do api PATCH "/tasks/$id" '{"isDone":true}' | fmt; done ;;
+    for id in "${POS[@]}"; do
+      api PATCH "/tasks/$id" '{"isDone":true}' >/dev/null
+      verify_task "$id" '{"isDone":true}' | fmt
+    done ;;
   rm)
     [ ${#POS[@]} -ge 1 ] || die $E_USAGE "rm needs a task id"
     for id in "${POS[@]}"; do
       title=$(api GET "/tasks/$id" | jq -r '.title') || exit $?
       api DELETE "/tasks/$id" >/dev/null
+      verify_absent "$id"
       printf 'deleted: %s  %s\n' "$id" "$title"
     done ;;
   start)
@@ -554,7 +623,12 @@ case "$cmd" in
   stop) api POST /task-control/stop | jq . ;;
   archive | restore)
     [ ${#POS[@]} -ge 1 ] || die $E_USAGE "$cmd needs a task id"
-    for id in "${POS[@]}"; do api POST "/tasks/$id/$cmd" >/dev/null && printf '%sd: %s\n' "$cmd" "$id"; done ;;
+    for id in "${POS[@]}"; do
+      api POST "/tasks/$id/$cmd" >/dev/null
+      if [ "$cmd" = archive ]; then expected='{"isArchived":true}'; else expected='{"isArchived":false}'; fi
+      verify_task_in_all "$id" "$expected" >/dev/null
+      printf '%sd: %s\n' "$cmd" "$id"
+    done ;;
   stats) cmd_stats ;;
   *) usage >&2; die $E_USAGE "unknown command: $cmd" ;;
 esac

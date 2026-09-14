@@ -4,6 +4,12 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 Written after the fact from the repository's history, so the entries below say what each change did rather than reproducing the reasoning; the commit bodies carry that
 
+## 2026-09-14
+
+### Changed
+
+- task mutations now read their result back inside `sp.sh` and exit 7 when requested fields, archival state, deletion, or a project move's cascade did not persist, so agents no longer spend another command and its context manually checking every successful write
+
 ## 2026-09-11
 
 ### Added
