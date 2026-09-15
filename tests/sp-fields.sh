@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
-# Print the field names Super Productivity declares for a task and a project, one per line,
-# read from the TypeScript the app ships in its app.asar: the plugin API's Task and Project
-# interfaces and the app's own TaskCopy, which the Local REST API returns. The first line
-# names the version, taken from the store path or the file's directory.
-#
-#   tests/sp-fields.sh ASAR
-#
 # tests/sp-fields.txt is this script's output for the version it names, so the gate can
 # hold the documents to the fields without the app on the runner; tests/check.sh compares
 # the two again when SP_ASAR points at an installed app.asar.
 #
-# Exit 0 with the list, 1 when the file declares none of the three interfaces, 2 on a
-# usage error. Needs bash 3.2 and POSIX tools only.
+# Needs bash 3.2 and POSIX tools only.
 set -euo pipefail
 
-usage() { sed -n '2,/^[^#]/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'; }
+usage() {
+  cat <<'EOF'
+Print the field names Super Productivity declares for a task and a project, one per line,
+read from the TypeScript the app ships in its app.asar: the plugin API's Task and Project
+interfaces and the app's own TaskCopy, which the Local REST API returns. The first line
+names the version, taken from the store path or the file's directory.
+
+  tests/sp-fields.sh ASAR
+
+Exit 0 with the list, 1 when the file declares none of the three interfaces, 2 on a
+usage error.
+EOF
+}
 
 case "${1:-}" in
   -h | --help | help)
