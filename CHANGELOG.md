@@ -6,6 +6,10 @@ Written after the fact from the repository's history, so the entries below say w
 
 ## 2026-09-15
 
+### Added
+
+- `.github/workflows/falsify.yml` runs `tests/defects.sh`, which breaks guards of `sp.sh` one at a time, through `t.sh falsify` on every push to main and by hand, so a guard the behaviour suite stops noticing turns CI red; `t.sh` and its markers are vendored from the [tests](https://github.com/rokokol/tests-skill) skill into `tests/`. The behaviour suite now also checks what it had let through: a rejected token, a reply that is not JSON, an API refusal, a tag set stored in another order, `done` left open, ambiguous and unknown names, Cyrillic case and ё, the refusals of `--tag TODAY`, a subtask's own project, `set --parent`, an empty `set`, `--due +3xd` and `--est 1hxm`, what `list` asks for, `--limit`, and `stats` counting a parent beside its subtasks
+
 ### Changed
 
 - `check-skill.sh` is vendored from the [skill-authoring](https://github.com/rokokol/skill-authoring-skill) skill, where the rules it checks now live, and reports the rules a skill can break without breaking as warnings on stdout, the exit code unchanged: a `Layout` or install section in runtime, `used to`, a `path:line` citation, a link to a sibling skill, a concrete model id, and the rest its `--help` lists
