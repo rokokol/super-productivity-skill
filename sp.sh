@@ -76,7 +76,8 @@ Options for add / set:
   --tag T[,T2]           tags by title or id; on set, T,T2 replaces the set
                          while +T adds and -T removes — one form or the other
   --due today|tomorrow|+3d|YYYY-MM-DD|none
-  --at "YYYY-MM-DD HH:MM"|none            due date with a time
+                                          the day the task is scheduled for
+  --at "YYYY-MM-DD HH:MM"|none            the same with a time
   --est 90m|1h30m|2h|0                    time estimate
   --notes TEXT           --title TEXT (set only)
   --parent <id>          (add only) create as a subtask; excludes --project and --tag

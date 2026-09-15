@@ -1,6 +1,6 @@
 ---
 name: super-productivity
-description: "Manage Super Productivity tasks through its Local REST API — list, create, edit, schedule, complete, delete, run the timer, and report tracked time. Use when the user means their own task list in Super Productivity rather than the agent's checklist for the current session: adding a task, rescheduling it or setting a deadline, subtasks, estimates, projects and tags, the backlog, archiving, starting or stopping the timer, or where the time went. Russian triggers: супер продуктивити, запиши в задачи, закинь в тудушку, добавь задачу, что у меня на сегодня, что у меня на завтра, что по планам на неделю, поставь на завтра, перенеси на пятницу, сдвинь дедлайн, разбей на подзадачи, это на полчаса, отметь выполненной, закрой задачу, убери в архив, закинь в бэклог, запусти таймер, останови таймер, сколько я сегодня наработал, сколько времени ушло на"
+description: "Manage Super Productivity tasks through its Local REST API — list, create, edit, schedule, complete, delete, run the timer, and report tracked time. Use when the user means their own task list in Super Productivity rather than the agent's checklist for the current session: adding a task, scheduling it for a date or rescheduling it, subtasks, estimates, projects and tags, the backlog, archiving, starting or stopping the timer, or where the time went. Russian triggers: супер продуктивити, запиши в задачи, закинь в тудушку, добавь задачу, что у меня на сегодня, что у меня на завтра, что по планам на неделю, поставь на завтра, перенеси на пятницу, разбей на подзадачи, это на полчаса, отметь выполненной, закрой задачу, убери в архив, закинь в бэклог, запусти таймер, останови таймер, сколько я сегодня наработал, сколько времени ушло на"
 license: MIT
 ---
 
@@ -57,7 +57,7 @@ user/
 - A task belongs to one project and may have several tags
 - Pass project and tag names, not ids. Resolution is case-insensitive, folds Cyrillic ё/е, and accepts a unique substring
 - Exit 3 means a name is unknown or ambiguous: show the candidates and ask rather than selecting silently
-- `TODAY` is a due-date query, not a real tag. Use `--due today`
+- `--due` and `--at` schedule a task for a day or a moment (`dueDay`, `dueWithTime`), and the app lists it in Today on that day. `TODAY` is that query, not a real tag: use `--due today`
 - `--tag a,b` on `set` replaces the complete tag set. Use `+a` and `-b` to merge
 - The plain display is flat, not hierarchical. A `sub` line is not guaranteed to belong to the nearest parent; use JSON `parentId` and `subTaskIds`
 - An open subtask can outlive a done parent. If a listed task has `parentId`, fetch its parent before reorganizing the tree
@@ -74,7 +74,7 @@ user/
 
 ## API limits
 
-This is the one list of what the API cannot do; `sp.sh help` and the readme point here. The API cannot create or rename projects and tags, define recurring tasks, re-parent a subtask, or reach standalone notes and boards. Ask the user to perform those actions in the app; do not simulate success
+This is the one list of what the API cannot do; `sp.sh help` and the readme point here. The API cannot create or rename projects and tags, define recurring tasks, re-parent a subtask, set a task's deadline, or reach standalone notes and boards. Ask the user to perform those actions in the app; do not simulate success
 
 The backlog is a project-level `backlogTaskIds` list, not a task field, and the API exposes no project write. Every `add` lands in `taskIds`; `--due none` only clears the date. When asked to create a backlog task, create it normally and tell the user to drag it into the backlog in the app
 

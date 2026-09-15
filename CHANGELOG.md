@@ -4,6 +4,12 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 Written after the fact from the repository's history, so the entries below say what each change did rather than reproducing the reasoning; the commit bodies carry that
 
+## 2026-09-16
+
+### Changed
+
+- `SKILL.md` and `sp.sh help` say that `--due` and `--at` schedule a task for a day or a moment, the day the app lists it in Today, and the description offers scheduling for a date instead of setting a deadline; a task's deadline is a separate field the API cannot set, and it joins the API limits
+
 ## 2026-09-15
 
 ### Added
