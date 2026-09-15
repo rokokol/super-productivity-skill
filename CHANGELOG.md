@@ -13,6 +13,7 @@ Written after the fact from the repository's history, so the entries below say w
 ### Changed
 
 - `check-skill.sh` is vendored from the [skill-authoring](https://github.com/rokokol/skill-authoring-skill) skill, where the rules it checks now live, and reports the rules a skill can break without breaking as warnings on stdout, the exit code unchanged: a `Layout` or install section in runtime, `used to`, a `path:line` citation, a link to a sibling skill, a concrete model id, and the rest its `--help` lists
+- `sp.sh --help` opens with what the tool is for — `CLI over Super Productivity's Local REST API` — moved down from a header comment nobody running it ever read, leaving the header empty. `tests/check.sh`, the gate, now answers `-h`, `--help` and `help` too
 
 ## 2026-09-14
 

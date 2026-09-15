@@ -1,18 +1,27 @@
 #!/usr/bin/env bash
-# The whole gate. Nothing here reaches the network or a package registry, so it
-# is safe to run on pull requests — and every check below is followed by proof
-# that it can go red, because a check that has never failed is a decoration: each
-# linter and gate against a known-bad input, the behaviour assertions through a
-# probe their own helper has to reject
-#
-#   check.sh [lint|behaviour|all]
-#
-# lint needs shellcheck, shfmt, actionlint and jq, behaviour needs jq alone — from PATH;
-# CI provides them through nix develop. behaviour is also what the macOS job runs, under
-# the bash and date that system ships, since the linters say the same on every platform:
-#
-#   /bin/bash ./tests/check.sh behaviour        # on a macOS runner
+# Every check below is followed by proof that it can go red, because a check that has
+# never failed is a decoration: each linter and gate against a known-bad input, the
+# behaviour assertions through a probe their own helper has to reject
 set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+check.sh — the whole gate
+
+  check.sh [lint|behaviour|all]
+
+  -h, --help   print this and exit
+
+lint needs shellcheck, shfmt, actionlint and jq, behaviour needs jq alone — from PATH;
+CI provides them through nix develop. behaviour is also what the macOS job runs, under
+the bash and date that system ships, since the linters say the same on every platform:
+
+  /bin/bash ./tests/check.sh behaviour        # on a macOS runner
+
+Nothing here reaches the network or a package registry
+Exit 0 when everything holds, 1 on a finding, 2 on a usage error
+EOF
+}
 
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$HERE"
@@ -25,6 +34,10 @@ fail() {
 mode="${1:-all}"
 case "$mode" in
   lint | behaviour | all) ;;
+  -h | --help | help)
+    usage
+    exit 0
+    ;;
   *) fail "no such mode: '$mode' — lint, behaviour or all" ;;
 esac
 

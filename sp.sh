@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# CLI over Super Productivity's Local REST API (Settings -> Misc -> Enable local REST API)
 set -euo pipefail
 
 SP_API=${SP_API:-http://127.0.0.1:3876}
@@ -100,6 +99,7 @@ script's directory when it holds secrets/ or user/, else
 $XDG_CONFIG_HOME/super-productivity-skill), SP_TOKEN_FILE (default
 SP_HOME/secrets/token), SP_TIMEOUT
 
+CLI over Super Productivity's Local REST API (Settings -> Misc -> Enable local REST API)
 The token comes from Settings -> Misc -> Access Token
 
 Exit codes, including write verification failure, and what the API cannot do:
