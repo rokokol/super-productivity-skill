@@ -6,5 +6,5 @@ vendor-sync.sh rokokol/ci-skill templates/vendor-sync.sh 30795947efcd4a307fde07f
 check-pins.sh rokokol/ci-skill templates/check-pins.sh 42d8ed275977a210e5de961a677a476decfaedaa e259b35eb552b43fe92582c708f4d870e5f012d6
 .github/workflows/vendor-sync.yml rokokol/ci-skill templates/github/workflows/vendor-sync.yml d55020ab3ca780ea6299336d923b8a3fcb8f491d a5bde77f98d55a43b2c993f4c96a952e0b68010d manual
 check-sh.sh rokokol/bash-best-practices-skill check-sh.sh 58213f1771505d949fe4e221fac1d05a3ba4ff4e 16f12c9e8fd7434eba67a7706a63b690e5942ac3
-check-interface.sh rokokol/ci-skill templates/check-interface.sh 183a9170fa2a1b648291fd75dfec372f802f5a20 75c6f3fcf8c15906a6169ec49bcf0e243e47db69
-check-skill.sh rokokol/skill-authoring-skill check-skill.sh 958f21ea2cf60c26a91c6d199ecb204a76a092ab ac20af17d5f29a842d19fdfa560d3ca136d20f25
+check-interface.sh rokokol/ci-skill templates/check-interface.sh 3ddb51e9c3b71465496c6c1b249269178814aeda c2b8d1412724f88472674c75641a86f9a053795f
+check-skill.sh rokokol/skill-authoring-skill check-skill.sh 8e360abe47b2e45f75db9bfe055360563b5e210d eb056056ab4f92dcf14bfb83286e5e514fd806a3
