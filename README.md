@@ -10,6 +10,7 @@
 ![jq](https://img.shields.io/badge/jq-1E90FF?style=flat)
 [![license](https://img.shields.io/badge/MIT-3DA639?style=flat)](LICENSE)
 [![ci](https://github.com/rokokol/super-productivity-skill/actions/workflows/build.yml/badge.svg)](https://github.com/rokokol/super-productivity-skill/actions/workflows/build.yml)
+[![falsify](https://github.com/rokokol/super-productivity-skill/actions/workflows/falsify.yml/badge.svg)](https://github.com/rokokol/super-productivity-skill/actions/workflows/falsify.yml)
 
 </div>
 
