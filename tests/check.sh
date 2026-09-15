@@ -254,10 +254,10 @@ if [ "$mode" != lint ]; then
   tagIds: [], isDone: false, timeSpent: 0, timeEstimate: 0, subTaskIds: []
 }, {
   id: "parent", title: "Parent", projectId: "p-notes", tagIds: [], isDone: false,
-  timeSpent: 0, timeEstimate: 0, subTaskIds: ["child"]
+  timeSpent: 3600000, timeEstimate: 0, subTaskIds: ["child"]
 }, {
   id: "child", title: "Child", parentId: "parent", projectId: "p-notes", tagIds: [],
-  isDone: false, timeSpent: 0, timeEstimate: 0, subTaskIds: []
+  isDone: false, timeSpent: 3600000, timeEstimate: 0, subTaskIds: []
 }]' >"$fake/api/tasks.json"
   # the same API with a projects payload of the wrong shape, for the internal-failure code
   cp "$fake/api"/*.json "$fake/broken/"
@@ -317,9 +317,41 @@ if [ "$mode" != lint ]; then
   expect_rc 2 "set --tag mixing a bare name with +/-" sp ./sp.sh set t1 --tag foo-bar,+home
   grep -q '^PATCH ' <(tail -n +"$((before + 1))" "$fake/api/requests") &&
     problem "set --tag mixing a bare name with +/- still sent a PATCH"
+  # A name resolves to one id or to nothing: never to the first of several, never to itself,
+  # and never by dropping the one in a list that missed. Cyrillic folds its case and ё to е
+  before=$(wc -l <"$fake/api/requests")
+  expect_rc 3 "a tag name two tags share" sp ./sp.sh set t1 --tag o
+  expect_rc 3 "a project name no project has" sp ./sp.sh set t1 --project Nowhere
+  expect_rc 3 "one unknown tag in a list" sp ./sp.sh set t1 --tag Home,Nowhere
+  grep -q '^PATCH ' <(tail -n +"$((before + 1))" "$fake/api/requests") &&
+    problem "a name that did not resolve to exactly one id still sent a PATCH"
+  sp ./sp.sh set t1 --tag +важное >/dev/null 2>&1 || problem "a Cyrillic tag in another case did not resolve"
+  expect_tags "a Cyrillic tag in another case" '["t-home","t-important"]'
+  sp ./sp.sh set t1 --tag +еще >/dev/null 2>&1 || problem "a tag spelt with е for ё did not resolve"
+  expect_tags "a tag spelt with е for ё" '["t-home","t-important","t-again"]'
+  expect_rc 0 "a tag set the app stores in another order" sp FAKE_SP_REVERSE_TAGS=1 ./sp.sh set t1 --tag Home,foo-bar
+  sp ./sp.sh set t1 --tag Home >/dev/null
 
   expect_rc 2 "list --limit abc" sp ./sp.sh list --limit abc
-  expect_rc 0 "list --limit 1" sp ./sp.sh list --limit 1
+  [ "$(sp ./sp.sh list --limit 1 | wc -l | tr -d ' ')" = 1 ] || problem "list --limit 1 did not print exactly one task"
+  last_list() { grep '^GET /tasks?' "$fake/api/requests" | tail -n1 | cut -d' ' -f2; }
+  sp ./sp.sh list --source archived >/dev/null
+  [[ $(last_list) == *includeDone=true* ]] || problem "list --source archived asked for open tasks only: $(last_list)"
+  sp ./sp.sh list --all >/dev/null
+  [[ $(last_list) == *source=all* ]] || problem "list --all left the archive out: $(last_list)"
+  sp ./sp.sh list --today >/dev/null
+  [[ $(last_list) == *tagId=TODAY* ]] || problem "list --today did not ask for today's tasks: $(last_list)"
+  sp ./sp.sh list --query 'a b&c' >/dev/null
+  [[ $(last_list) == *query=a%20b%26c* ]] || problem "list --query sent the text unencoded: $(last_list)"
+  # Refused before anything is sent: each would otherwise reach the API as something else
+  expect_rc 2 "TODAY given as a tag" sp ./sp.sh add dated --tag TODAY
+  expect_rc 2 "a subtask with a project of its own" sp ./sp.sh add sub --parent parent --project Notes
+  expect_rc 2 "set --parent" sp ./sp.sh set t1 --parent parent
+  expect_rc 2 "set with nothing to change" sp ./sp.sh set t1
+  expect_rc 2 "--due +3xd" sp ./sp.sh add dated --due +3xd
+  expect_rc 2 "--est 1hxm" sp ./sp.sh set t1 --est 1hxm
+  sp ./sp.sh set t1 --est 1h30m >/dev/null 2>&1 || problem "set --est 1h30m failed"
+  [ "$(jq -r '.timeEstimate' <<<"$(last_patch)")" = 5400000 ] || problem "--est 1h30m sent $(last_patch)"
   expect_rc 2 "list --limit with no value" sp ./sp.sh list --limit
   expect_rc 2 "stats --days abc" sp ./sp.sh stats --days abc
   expect_rc 2 "stats --days 0" sp ./sp.sh stats --days 0
@@ -352,10 +384,15 @@ if [ "$mode" != lint ]; then
   stubborn=$(sp ./sp.sh add stubborn --json | jq -r '.id')
   expect_rc 7 "rm detects a task left behind after an optimistic response" \
     sp FAKE_SP_SKIP_DELETE=1 ./sp.sh rm "$stubborn"
+  expect_rc 0 "done verifies isDone" sp ./sp.sh "done" "$(sp ./sp.sh add finished --json | jq -r '.id')"
+  expect_rc 7 "done detects a task left open after an optimistic response" \
+    sp FAKE_SP_DISCARD_FIELD=isDone ./sp.sh "done" "$(sp ./sp.sh add unfinished --json | jq -r '.id')"
 
   expect_out "stats --by day --days 7 reaches six days back" "^$(day_offset -6) " sp ./sp.sh stats --by day --days 7
   expect_no "stats --by day --days 7 stops short of seven days back" "^$(day_offset -7) " sp ./sp.sh stats --by day --days 7
-  expect_out "stats --by project without --days is all-time" '^Notes  3h spent' sp ./sp.sh stats --by project
+  # A parent stores the sum of its subtasks' time, so counting it beside them counts it twice
+  expect_out "stats --by project without --days is all-time" '^Notes  4h spent' sp ./sp.sh stats --by project
+  expect_out "stats counts leaf tasks only" ' tracked 4h$' sp ./sp.sh stats --by project
   expect_out "stats --by project --days 1 is today only" '^Notes  1h spent' sp ./sp.sh stats --by project --days 1
   expect_out "stats --by tag --days 1 is today only" '^Home  1h spent' sp ./sp.sh stats --by tag --days 1
 
@@ -363,6 +400,16 @@ if [ "$mode" != lint ]; then
   expect_rc 1 "curl gets an empty reply" sp FAKE_CURL_EXIT=52 ./sp.sh health
   expect_rc 2 "curl rejects SP_API as a URL" sp FAKE_CURL_EXIT=3 ./sp.sh health
   expect_rc 6 "a payload of the wrong shape" sp FAKE_SP="$fake/broken" ./sp.sh list --project Notes
+  expect_rc 5 "a rejected token" \
+    sp FAKE_SP_REPLY='401 {"ok":false,"error":{"code":"UNAUTHORIZED","message":"invalid token"}}' ./sp.sh health
+  # A reply that is not JSON exits as an API error either way; what the guard adds is saying
+  # what came back instead of relaying jq's parse error
+  nonjson_rc=0
+  nonjson_out=$(sp FAKE_SP_REPLY='502 <html>bad gateway</html>' ./sp.sh health 2>&1) || nonjson_rc=$?
+  [ "$nonjson_rc" = 4 ] || problem "a reply that is not JSON: exited $nonjson_rc, want 4"
+  grep -qxF 'HTTP 502: unexpected non-JSON response' <<<"$nonjson_out" ||
+    problem "a reply that is not JSON was not named as such: $nonjson_out"
+  expect_rc 4 "a task the API does not have" sp ./sp.sh get no-such-task
 
   expect_out "projects --json prints the payload" '"title": "Notes"' sp ./sp.sh projects --json
   expect_out "tags --json prints the payload" '"title": "Home"' sp ./sp.sh tags --json
@@ -458,6 +505,7 @@ if [ "$mode" != lint ]; then
     [ "$(jq -r '.dueWithTime' <<<"$(last_post)")" = "$(($(epoch_at '2026-09-12 10:00') * 1000))" ] ||
       problem "$kind date: --at sent $(last_post)"
     expect_rc 2 "$kind date: --at on an hour that does not exist" on_date ./sp.sh add dated --at "2026-09-12 25:00"
+    expect_rc 2 "$kind date: --at on a day that does not exist" on_date ./sp.sh add dated --at "2026-02-30 10:00"
     expect_out "$kind date: stats --by day reaches six days back" "^$(day_offset -6) " \
       on_date ./sp.sh stats --by day --days 7
     expect_no "$kind date: stats --by day stops short of seven days back" "^$(day_offset -7) " \

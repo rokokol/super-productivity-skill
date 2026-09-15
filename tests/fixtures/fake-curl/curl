@@ -9,7 +9,10 @@
 # $FAKE_SP/auth. FAKE_CURL_EXIT=N makes the call fail the way curl does, with exit
 # status N and no output
 # FAKE_SP_DISCARD_FIELD names one field that a write silently drops while still returning
-# the optimistic response, reproducing the real API's allow-list behaviour
+# the optimistic response, reproducing the real API's allow-list behaviour.
+# FAKE_SP_REVERSE_TAGS=1 stores a written tag set in reverse order, as an app free to keep
+# its own order may. FAKE_SP_REPLY="CODE BODY" answers every request with that status and
+# that body verbatim, for a refusal or a reply that is not JSON
 set -euo pipefail
 
 [ -z "${FAKE_CURL_EXIT:-}" ] || exit "$FAKE_CURL_EXIT"
@@ -46,6 +49,10 @@ printf '%s %s %s\n' "$method" "$path" "$body" >>"$FAKE_SP/requests"
 reply() { # reply HTTP_CODE JSON — the body, then the -w '\n%{http_code}' trailer
   printf '%s\n%s' "$2" "$1"
 }
+if [ -n "${FAKE_SP_REPLY:-}" ]; then
+  reply "${FAKE_SP_REPLY%% *}" "${FAKE_SP_REPLY#* }"
+  exit 0
+fi
 ok() { reply 200 "$(jq -c '{ok: true, data: .}')"; }
 missing() { reply 404 '{"ok":false,"error":{"code":"NOT_FOUND","message":"no such route or task"}}'; }
 
@@ -84,6 +91,7 @@ case "$method $route" in
     if [ -n "$found" ]; then
       optimistic=$(jq -c --argjson b "$body" '. + $b' <<<"$found")
       saved=$(jq -c --argjson b "$(stored_body)" '. + $b' <<<"$found")
+      [ -z "${FAKE_SP_REVERSE_TAGS:-}" ] || saved=$(jq -c '.tagIds |= ((. // []) | reverse)' <<<"$saved")
       store_task "$saved"
       if [ -z "${FAKE_SP_SKIP_CASCADE:-}" ] && jq -e 'has("projectId")' <<<"$body" >/dev/null; then
         while IFS= read -r child; do
