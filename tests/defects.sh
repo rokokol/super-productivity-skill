@@ -179,11 +179,20 @@ EOF
 defect 'verify/archive' 'sp.sh' \
   "$(
     cat <<'EOF'
-if [ "$cmd" = archive ]; then expected='{"isArchived":true}'; else expected='{"isArchived":false}'; fi
+  [ "$found" != '[]' ] || die $E_VERIFY "write verification failed: task $id is not in the $want list"
 EOF
   )" \
-  "expected='{}'" \
-  'a task the app left active is reported as archived'
+  '  true' \
+  'a task the app left where it was is reported as archived or restored'
+
+defect 'verify/archive-partition' 'sp.sh' \
+  "$(
+    cat <<'EOF'
+  [ "$found" = '[]' ] || die $E_VERIFY "write verification failed: task $id is still in the $other list"
+EOF
+  )" \
+  '  true' \
+  'an app that serves the task from both lists, having ignored source, is reported as having moved it'
 
 defect 'verify/add' 'sp.sh' \
   "$(

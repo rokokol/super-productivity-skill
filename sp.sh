@@ -204,11 +204,21 @@ verify_task() { # verify_task ID EXPECTED -> the independently read task
   verify_fields "$id" "$expected" "$actual"
 }
 
-verify_task_in_all() { # archived tasks may be absent from the direct active-task route
-  local id=$1 expected=$2 actual
-  actual=$(api GET '/tasks?includeDone=true&source=all' | jq -c --arg id "$id" '.[] | select(.id == $id)') || exit $?
-  [ -n "$actual" ] || die $E_VERIFY "write verification failed: task $id disappeared"
-  verify_fields "$id" "$expected" "$actual"
+verify_partition() { # verify_partition ID active|archived — the list the app must now serve it from
+  # the app sends no field saying a task is archived, however its own Task interface
+  # declares one; it serves each task from exactly one of source=active and
+  # source=archived, so which list holds it is the only evidence the move happened
+  local id=$1 want=$2 other found
+  case $want in
+    archived) other=active ;;
+    *) other=archived ;;
+  esac
+  found=$(api GET "/tasks?includeDone=true&source=$want" |
+    jq -c --arg id "$id" '[.[] | select(.id == $id) | .id]') || exit $?
+  [ "$found" != '[]' ] || die $E_VERIFY "write verification failed: task $id is not in the $want list"
+  found=$(api GET "/tasks?includeDone=true&source=$other" |
+    jq -c --arg id "$id" '[.[] | select(.id == $id) | .id]') || exit $?
+  [ "$found" = '[]' ] || die $E_VERIFY "write verification failed: task $id is still in the $other list"
 }
 
 project_tree_ids() { # project_tree_ids ROOT -> ROOT and every descendant in the complete task set
@@ -626,8 +636,7 @@ case "$cmd" in
     [ ${#POS[@]} -ge 1 ] || die $E_USAGE "$cmd needs a task id"
     for id in "${POS[@]}"; do
       api POST "/tasks/$id/$cmd" >/dev/null
-      if [ "$cmd" = archive ]; then expected='{"isArchived":true}'; else expected='{"isArchived":false}'; fi
-      verify_task_in_all "$id" "$expected" >/dev/null
+      if [ "$cmd" = archive ]; then verify_partition "$id" archived; else verify_partition "$id" active; fi
       printf '%sd: %s\n' "$cmd" "$id"
     done ;;
   stats) cmd_stats ;;

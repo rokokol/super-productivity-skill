@@ -382,10 +382,19 @@ if [ "$mode" != lint ]; then
   created_id=$(tail -n +"$((before + 1))" "$fake/api/requests" | grep '^GET /tasks/' | tail -n1 | cut -d' ' -f2)
   [ -n "$created_id" ] || problem "add did not read the new task back after POST"
 
-  expect_rc 0 "archive verifies isArchived" sp ./sp.sh archive t1
-  expect_rc 0 "restore verifies isArchived" sp ./sp.sh restore t1
+  expect_rc 0 "archive verifies the task reached the archived list" sp ./sp.sh archive t1
+  expect_rc 7 "restore detects a task left archived after an optimistic response" \
+    sp FAKE_SP_SKIP_RESTORE=1 ./sp.sh restore t1
+  expect_rc 0 "restore verifies the task came back to the active list" sp ./sp.sh restore t1
   expect_rc 7 "archive detects a task left active after an optimistic response" \
     sp FAKE_SP_SKIP_ARCHIVE=1 ./sp.sh archive t1
+  expect_rc 7 "archive detects an app that serves the archived task as active too" \
+    sp FAKE_SP_ARCHIVE_LINGERS=1 ./sp.sh archive t1
+  before=$(wc -l <"$fake/api/requests")
+  sp ./sp.sh restore t1 >/dev/null 2>&1 || problem "restore left t1 archived after the lingering archive"
+  sent=$(tail -n +"$((before + 1))" "$fake/api/requests")
+  grep -qE '^GET /tasks\?.*source=active' <<<"$sent" || problem "restore did not read the active list back"
+  grep -qE '^GET /tasks\?.*source=archived' <<<"$sent" || problem "restore did not check the archived list"
 
   expect_rc 0 "moving a parent verifies its descendants" sp ./sp.sh set parent --project INBOX_PROJECT
   sp ./sp.sh set parent --project Notes >/dev/null

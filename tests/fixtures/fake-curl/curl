@@ -13,6 +13,13 @@
 # FAKE_SP_REVERSE_TAGS=1 stores a written tag set in reverse order, as an app free to keep
 # its own order may. FAKE_SP_REPLY="CODE BODY" answers every request with that status and
 # that body verbatim, for a refusal or a reply that is not JSON
+#
+# The archive is a list of ids in $FAKE_SP/archived rather than a task field, because that
+# is what the app exposes: it serves a task from exactly one of source=active and
+# source=archived and sends no isArchived of its own, however its own Task interface
+# declares one. FAKE_SP_SKIP_ARCHIVE=1 and FAKE_SP_SKIP_RESTORE=1 answer the move
+# optimistically without making it, and FAKE_SP_ARCHIVE_LINGERS=1 keeps serving an
+# archived task from the active list too, as an app ignoring source would
 set -euo pipefail
 
 [ -z "${FAKE_CURL_EXIT:-}" ] || exit "$FAKE_CURL_EXIT"
@@ -44,6 +51,8 @@ done
 
 path=/${url#*://*/}
 route=${path%%\?*}
+query=''
+[ "$route" = "$path" ] || query=${path#*\?}
 printf '%s %s %s\n' "$method" "$path" "$body" >>"$FAKE_SP/requests"
 
 reply() { # reply HTTP_CODE JSON — the body, then the -w '\n%{http_code}' trailer
@@ -56,7 +65,26 @@ fi
 ok() { reply 200 "$(jq -c '{ok: true, data: .}')"; }
 missing() { reply 404 '{"ok":false,"error":{"code":"NOT_FOUND","message":"no such route or task"}}'; }
 
+param() { # param NAME — the value NAME carries in the query string, empty when absent
+  local want=$1 kv
+  while IFS= read -r kv; do
+    case $kv in "$want="*)
+      printf '%s' "${kv#*=}"
+      return
+      ;;
+    esac
+  done < <(tr '&' '\n' <<<"$query")
+}
 task() { jq -c --arg id "$1" '.[] | select(.id == $id)' "$FAKE_SP/tasks.json"; }
+archived_ids() { # the ids the app keeps in its archive, which no task field records
+  if [ -f "$FAKE_SP/archived" ]; then cat "$FAKE_SP/archived"; else printf '[]'; fi
+}
+store_archived() { # store_archived JSON — replace the archive with this id array
+  local value=$1 tmp
+  tmp=$(mktemp "$FAKE_SP/archived.XXXXXX")
+  printf '%s\n' "$value" >"$tmp"
+  mv "$tmp" "$FAKE_SP/archived"
+}
 stored_body() {
   if [ -n "${FAKE_SP_DISCARD_FIELD:-}" ]; then
     jq -c --arg field "$FAKE_SP_DISCARD_FIELD" 'del(.[$field])' <<<"$body"
@@ -81,7 +109,24 @@ case "$method $route" in
   "GET /health") ok <<<'{"server":"up","rendererReady":true}' ;;
   "GET /projects") ok <"$FAKE_SP/projects.json" ;;
   "GET /tags") ok <"$FAKE_SP/tags.json" ;;
-  "GET /tasks") ok <"$FAKE_SP/tasks.json" ;;
+  "GET /tasks")
+    # no source names the active list, as the app answers it
+    case "$(param source)" in
+      all) jq -c . "$FAKE_SP/tasks.json" | ok ;;
+      archived)
+        jq -c --argjson a "$(archived_ids)" 'map(select(.id as $i | $a | index($i) != null))' \
+          "$FAKE_SP/tasks.json" | ok
+        ;;
+      *)
+        if [ -n "${FAKE_SP_ARCHIVE_LINGERS:-}" ]; then
+          jq -c . "$FAKE_SP/tasks.json" | ok
+        else
+          jq -c --argjson a "$(archived_ids)" 'map(select(.id as $i | $a | index($i) == null))' \
+            "$FAKE_SP/tasks.json" | ok
+        fi
+        ;;
+    esac
+    ;;
   "GET /tasks/"*)
     found=$(task "${route#/tasks/}")
     if [ -n "$found" ]; then ok <<<"$found"; else missing; fi
@@ -113,10 +158,8 @@ case "$method $route" in
     id=${id%/archive}
     found=$(task "$id")
     if [ -n "$found" ]; then
-      [ -n "${FAKE_SP_SKIP_ARCHIVE:-}" ] || {
-        saved=$(jq -c '.isArchived = true' <<<"$found")
-        store_task "$saved"
-      }
+      [ -n "${FAKE_SP_SKIP_ARCHIVE:-}" ] ||
+        store_archived "$(jq -c --arg id "$id" '. + [$id] | unique' <<<"$(archived_ids)")"
       ok <<<"$found"
     else
       missing
@@ -127,8 +170,8 @@ case "$method $route" in
     id=${id%/restore}
     found=$(task "$id")
     if [ -n "$found" ]; then
-      saved=$(jq -c '.isArchived = false' <<<"$found")
-      store_task "$saved"
+      [ -n "${FAKE_SP_SKIP_RESTORE:-}" ] ||
+        store_archived "$(jq -c --arg id "$id" 'map(select(. != $id))' <<<"$(archived_ids)")"
       ok <<<"$found"
     else
       missing
