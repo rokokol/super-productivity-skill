@@ -18,8 +18,10 @@
 # is what the app exposes: it serves a task from exactly one of source=active and
 # source=archived and sends no isArchived of its own, however its own Task interface
 # declares one. FAKE_SP_SKIP_ARCHIVE=1 and FAKE_SP_SKIP_RESTORE=1 answer the move
-# optimistically without making it, and FAKE_SP_ARCHIVE_LINGERS=1 keeps serving an
-# archived task from the active list too, as an app ignoring source would
+# optimistically without making it, FAKE_SP_ARCHIVE_LINGERS=1 keeps serving an archived
+# task from the active list too, as an app ignoring source would, and
+# FAKE_SP_ARCHIVE_SWALLOWS=1 drops the task from both lists, as a request that reaches
+# neither would leave it
 set -euo pipefail
 
 [ -z "${FAKE_CURL_EXIT:-}" ] || exit "$FAKE_CURL_EXIT"
@@ -158,8 +160,11 @@ case "$method $route" in
     id=${id%/archive}
     found=$(task "$id")
     if [ -n "$found" ]; then
-      [ -n "${FAKE_SP_SKIP_ARCHIVE:-}" ] ||
+      if [ -n "${FAKE_SP_ARCHIVE_SWALLOWS:-}" ]; then
+        delete_task "$id"
+      elif [ -z "${FAKE_SP_SKIP_ARCHIVE:-}" ]; then
         store_archived "$(jq -c --arg id "$id" '. + [$id] | unique' <<<"$(archived_ids)")"
+      fi
       ok <<<"$found"
     else
       missing

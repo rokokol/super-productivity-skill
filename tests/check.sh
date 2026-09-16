@@ -390,6 +390,8 @@ if [ "$mode" != lint ]; then
     sp FAKE_SP_SKIP_ARCHIVE=1 ./sp.sh archive t1
   expect_rc 7 "archive detects an app that serves the archived task as active too" \
     sp FAKE_SP_ARCHIVE_LINGERS=1 ./sp.sh archive t1
+  expect_rc 7 "archive detects a task that reached neither list" \
+    sp FAKE_SP_ARCHIVE_SWALLOWS=1 ./sp.sh archive "$(sp ./sp.sh add swallowed --json | jq -r '.id')"
   before=$(wc -l <"$fake/api/requests")
   sp ./sp.sh restore t1 >/dev/null 2>&1 || problem "restore left t1 archived after the lingering archive"
   sent=$(tail -n +"$((before + 1))" "$fake/api/requests")
