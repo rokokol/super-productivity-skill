@@ -10,6 +10,8 @@ Written after the fact from the repository's history, so the entries below say w
 
 - `SKILL.md` and `sp.sh help` say that `--due` and `--at` schedule a task for a day or a moment, the day the app lists it in Today, and the description offers scheduling for a date instead of setting a deadline; a task's deadline is a separate field the API cannot set, and it joins the API limits
 
+- `SKILL.md` says among the API limits that an archived task is reachable only by `restore`: `get`, `set`, `done`, `start` and `rm` exit 4 on one, although `list --all --source all` lists it
+
 ### Fixed
 
 - `archive` and `restore` no longer exit 7 on a move the app actually made: they verify it by the list the task is now served from — present under `source=archived`, absent under `source=active`, or the other way round — instead of an `isArchived` field the Local REST API never sends, however the app's own `Task` interface declares one. The fake API the tests run against now models the archive the same way, so the suite stops vouching for a field that does not arrive

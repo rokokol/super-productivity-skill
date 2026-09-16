@@ -78,6 +78,8 @@ This is the one list of what the API cannot do; `sp.sh help` and the readme poin
 
 The backlog is a project-level `backlogTaskIds` list, not a task field, and the API exposes no project write. Every `add` lands in `taskIds`; `--due none` only clears the date. When asked to create a backlog task, create it normally and tell the user to drag it into the backlog in the app
 
+An archived task is reachable only by `restore`: `GET`, `PATCH` and `DELETE /tasks/<id>` answer `TASK_NOT_FOUND`, so `get`, `set`, `done`, `start` and `rm` exit 4 on one, although `list --all --source all` lists it. Restore it first when an archived task has to be read, changed or deleted
+
 Do not send guessed raw fields. For example, `PATCH /tasks/<id>` with `{"isBacklog":true}` returns success but changes nothing because the field is outside the allow-list; this is expected behavior, not an upstream defect
 
 ## Commands
