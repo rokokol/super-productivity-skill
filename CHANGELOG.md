@@ -4,6 +4,13 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 Written after the fact from the repository's history, so the entries below say what each change did rather than reproducing the reasoning; the commit bodies carry that
 
+## 2026-09-18
+
+### Changed
+
+- `sp.sh help` lists every exit code it can produce instead of sending the reader to `SKILL.md` for them, which is the one place in this family where the help was not the source of truth about its own interface. `SKILL.md` keeps what an agent should do about each code and no longer restates what the code means
+- `sp.sh` gains a header comment saying that the `Exit` rows are held true by hand: each code is one of the `E_*` constants raised through `die`, and `check-sh.sh` matches a literal `exit N` on the source side, so it cannot hold this help to its codes the way it does elsewhere
+
 ## 2026-09-16
 
 ### Changed

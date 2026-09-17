@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# The Exit rows in usage() are held true by hand. Every code is one of the E_* constants
+# below, raised through die, and check-sh.sh matches a literal `exit N` on the source
+# side — so it cannot hold this help to its codes the way it does for the rest of the
+# family. Change a constant and the row goes with it
 set -euo pipefail
 
 SP_API=${SP_API:-http://127.0.0.1:3876}
@@ -103,8 +107,19 @@ SP_HOME/secrets/token), SP_TIMEOUT
 CLI over Super Productivity's Local REST API (Settings -> Misc -> Enable local REST API)
 The token comes from Settings -> Misc -> Access Token
 
-Exit codes, including write verification failure, and what the API cannot do:
-SKILL.md beside this script
+What the API cannot do — projects and tags it will not create or rename, recurring
+tasks, re-parenting, deadlines, standalone notes and boards — is in SKILL.md beside
+this script
+
+Exit:
+  0  done
+  1  Super Productivity is unreachable at SP_API
+  2  a usage error, an SP_API curl cannot use included
+  3  a project or tag name that is unknown or ambiguous
+  4  the API refused the request, passed on as `code: message`
+  5  the token is missing, or the API rejected it
+  6  the API sent data of an unexpected shape, or there is a bug in this script
+  7  a task mutation was not visible when it was read back
 EOF
 }
 

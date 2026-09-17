@@ -110,12 +110,14 @@ A task id can open with `-`, since `-` is in the alphabet ids are drawn from. Pa
 
 `-` is open, `x` is done, and `sub` marks a subtask. `@project` is omitted for Inbox. Use `--json` whenever structure or exact fields matter
 
-| Code | Meaning and response |
+What each code means is in `sp.sh help`, which owns them. What to do about one:
+
+| Code | Response |
 | ---: | --- |
-| 1 | App unreachable: ask the user to start the desktop app and enable **Settings → Misc → Enable local REST API** |
-| 2 | Bad usage, including an `SP_API` curl cannot use: follow the command's diagnostic |
-| 3 | Project or tag unresolved: relay the candidates and ask |
-| 4 | API error: relay `code: message` verbatim |
-| 5 | Token missing or rejected: ask the user to write a fresh one with the command in Session setup |
-| 6 | Data of an unexpected shape, or a bug in `sp.sh`: relay the message and stop rather than retrying with guessed arguments |
-| 7 | A task mutation was not visible when read back: relay the field mismatch; do not report success or repeat the write |
+| 1 | ask the user to start the desktop app and enable **Settings → Misc → Enable local REST API** |
+| 2 | follow the command's diagnostic |
+| 3 | relay the candidates and ask rather than selecting silently |
+| 4 | relay `code: message` verbatim |
+| 5 | ask the user to write a fresh token with the command in Session setup |
+| 6 | relay the message and stop, rather than retrying with guessed arguments |
+| 7 | relay the field mismatch; do not report success and do not repeat the write |
