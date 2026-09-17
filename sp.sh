@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Every exit code is one of the E_* constants below, and the Exit rows in usage() name the
+# same numbers: change a constant and the row goes with it
 set -euo pipefail
 
 SP_API=${SP_API:-http://127.0.0.1:3876}
