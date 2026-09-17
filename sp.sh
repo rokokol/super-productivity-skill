@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# The Exit rows in usage() are held true by hand. Every code is one of the E_* constants
-# below, raised through die, and check-sh.sh matches a literal `exit N` on the source
-# side — so it cannot hold this help to its codes the way it does for the rest of the
-# family. Change a constant and the row goes with it
 set -euo pipefail
 
 SP_API=${SP_API:-http://127.0.0.1:3876}
