@@ -4,6 +4,16 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 Written after the fact from the repository's history, so the entries below say what each change did rather than reproducing the reasoning; the commit bodies carry that
 
+## 2026-09-23
+
+### Changed
+
+- `sp.sh` puts the herestring before the other redirections on the line that runs the real jq, because tree-sitter's bash grammar accepts a herestring only as the first redirection. The command sends and receives exactly what it did; the file now parses as a tree, so a checker that reads it as one is reliable over all of it rather than guessing past an error node
+
+### Added
+
+- `check-comments.allow` at the root excuses a rejected parse under `tests/fixtures/`, where a file is unparseable on purpose
+
 ## 2026-09-18
 
 ### Changed

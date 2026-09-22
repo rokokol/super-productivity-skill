@@ -184,7 +184,8 @@ start the desktop app and enable Settings -> Misc -> Enable local REST API" ;;
   code=${out##*$'\n'}
   json=${out%$'\n'*}
   # the real jq: a parse failure here is the diagnosis, not an internal error
-  if [ -z "$json" ] || ! command jq -e . >/dev/null 2>&1 <<<"$json"; then
+  # The herestring comes first: tree-sitter rejects one placed after another redirect
+  if [ -z "$json" ] || ! command jq -e . <<<"$json" >/dev/null 2>&1; then
     die $E_API "HTTP $code: unexpected non-JSON response"
   fi
   if [ "$(jq -r '.ok' <<<"$json")" != "true" ]; then
