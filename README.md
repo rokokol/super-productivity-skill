@@ -45,7 +45,7 @@ npx skills add -g rokokol/super-productivity-skill
 Claude Code also takes it as a plugin:
 
 ```
-/plugin marketplace add rokokol/super-productivity-skill
+/plugin marketplace add rokokol/skills
 /plugin install super-productivity@rokokol-skills
 ```
 
