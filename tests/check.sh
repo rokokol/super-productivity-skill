@@ -268,7 +268,7 @@ if [ "$mode" != lint ]; then
     "$@" >/dev/null 2>&1 || rc=$?
     [ "$rc" = "$want" ] || problem "$what: exited $rc, want $want"
   }
-  expect_out() { # expect_out WHAT PATTERN CMD... — CMD must succeed and print a line matching PATTERN
+  expect_out() { # expect_out WHAT PATTERN CMD... — CMD succeeds and prints a line matching PATTERN
     local what=$1 pattern=$2 out
     shift 2
     out=$("$@" 2>&1) || {
@@ -277,7 +277,7 @@ if [ "$mode" != lint ]; then
     }
     grep -qE -- "$pattern" <<<"$out" || problem "$what: no line matches /$pattern/ in: $out"
   }
-  expect_no() { # expect_no WHAT PATTERN CMD... — CMD must succeed and print no line matching PATTERN
+  expect_no() { # expect_no WHAT PATTERN CMD... — CMD succeeds and prints no line matching PATTERN
     local what=$1 pattern=$2 out
     shift 2
     out=$("$@" 2>&1) || {
@@ -309,7 +309,7 @@ if [ "$mode" != lint ]; then
   grep -q '^PATCH ' <(tail -n +"$((before + 1))" "$fake/api/requests") &&
     problem "set --tag mixing a bare name with +/- still sent a PATCH"
   # A name resolves to one id or to nothing: never to the first of several, never to itself,
-  # and never by dropping the one in a list that missed. Cyrillic folds its case and ё to е
+  # and never by dropping the one in a list that missed. Cyrillic folds its case and "ё" to "е"
   before=$(wc -l <"$fake/api/requests")
   expect_rc 3 "a tag name two tags share" sp ./sp.sh set t1 --tag o
   expect_rc 3 "a project name no project has" sp ./sp.sh set t1 --project Nowhere
