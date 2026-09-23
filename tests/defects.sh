@@ -98,7 +98,7 @@ EOF
 defect 'api/non-json' 'sp.sh' \
   "$(
     cat <<'EOF'
-  if [ -z "$json" ] || ! command jq -e . >/dev/null 2>&1 <<<"$json"; then
+  if [ -z "$json" ] || ! command jq -e . <<<"$json" >/dev/null 2>&1; then
 EOF
   )" \
   '  if false; then' \
