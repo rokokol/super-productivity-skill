@@ -10,3 +10,4 @@ check-interface.sh rokokol/ci-skill templates/check-interface.sh 50429c30159553c
 check-skill.sh rokokol/skill-authoring-skill check-skill.sh 399d099461fbba8505d4750a582fab3f25bf83ce 3cb536abc18de6327b77ccf060826e793bf66280
 tests/t.sh rokokol/tests-skill t.sh 5fc47bc7fc2cd7772fa00de0589a34b3a29228d9 4fa169edebe55ad0190b5fb5c45fc33142e4d7a3
 tests/markers/ rokokol/tests-skill markers/ cd0782cd52c4692ac9ab1b08206aa888721fb1ce 65d141bbf07ecb99a3bd6ebfe4e0d3050a2c1ab4
+check-prose.sh rokokol/create-readme-skill check-prose.sh 66820c8be3477c218dabdfcbb5e41e085de40e57 3054ffa2de0990be2164494d734f34f17eda5e2b

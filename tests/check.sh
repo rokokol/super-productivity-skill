@@ -127,6 +127,12 @@ if [ "$mode" != behaviour ]; then
   # The ci skill's pin guard, which proves on every run that it catches each unpinned shape
   ./check-pins.sh
 
+  echo "== every document keeps the house rules a script can decide"
+  # The prose rules, vendored from the create-readme skill: a paragraph on one line, no
+  # full stop closing one, plain quotation marks. It proves each of its own rules able to
+  # fail on every run, so nothing here has to
+  ./check-prose.sh README.md SKILL.md CHANGELOG.md
+
   echo "== SKILL.md loads, every reference is reachable, and every link and anchor resolves"
   # The one gate every skill repository shares, each check proven able to fail on a planted
   # copy on every run
