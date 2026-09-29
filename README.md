@@ -79,7 +79,7 @@ Where the REST API has no endpoint — a project or a tag cannot be created thro
 
 ## Private context
 
-The skill can keep durable personal conventions in `user/` inside its private directory, which `./sp.sh home` prints: the skill's own directory when it already holds `secrets/` or `user/`, so a clone you sync between machines keeps them with it, and `~/.config/super-productivity-skill` otherwise, where a plugin or `npx skills` update, which replaces the skill directory whole, cannot reach them. `SP_HOME` overrides both: `preferences.md` describes how you prefer to work with the tool, while `projects/*.md` records what belongs in existing projects, their usual tags, estimation style, or scheduling policy. These notes are a local cache rather than API state, so they never contain tokens, ids, task snapshots, or statistics, and live API data always wins when a note becomes stale
+The skill can keep durable personal conventions in `user/` inside its private directory, which `./sp.sh home` prints: the skill's own directory when it already holds `user/`, so a clone you sync between machines keeps the notes with it, and `~/.config/super-productivity-skill` otherwise, where a plugin or `npx skills` update, which replaces the skill directory whole, cannot reach them. `SP_HOME` overrides both: `preferences.md` describes how you prefer to work with the tool, while `projects/*.md` records what belongs in existing projects, their usual tags, estimation style, or scheduling policy. These notes are a local cache rather than API state, so they never contain tokens, ids, task snapshots, or statistics, and live API data always wins when a note becomes stale
 
 ## Tests
 
@@ -91,13 +91,11 @@ Lints every bash script in the repository, found by its shebang rather than by a
 
 ## Security
 
-Every request carries a bearer token, issued by the app under Settings → Misc → **Access Token**. The script reads it from `$SP_TOKEN`, and otherwise from `secrets/token` in the private directory above — git-ignored when that is the skill's own directory, outside any repository when it is the XDG one. Run this from the skill's directory; the value is typed at a prompt that does not echo, so it stays out of your shell history too:
+Every request carries a bearer token, issued by the app under Settings → Misc → **Access Token**. The script reads it from `$SP_TOKEN`, and otherwise from the file `./sp.sh token-file` prints: one per machine, outside any repository, and never inside a clone you sync, because each app issues its own token. Run this from the skill's directory; the value is typed at a prompt that does not echo, so it stays out of your shell history too:
 
 ```bash
-read -rs t && [ -n "$t" ] && d=$(./sp.sh home)/secrets && mkdir -p "$d" && chmod 700 "$d" && (umask 077 && printf '%s\n' "$t" >"$d/token") && unset t
+read -rs t && [ -n "$t" ] && f=$(./sp.sh token-file) && mkdir -p "${f%/*}" && chmod 700 "${f%/*}" && (umask 077 && printf '%s\n' "$t" >"$f") && unset t
 ```
-
-To keep the token in a clone you sync, run `mkdir secrets` in it first, so `sp.sh home` picks the clone
 
 `SP_TOKEN_FILE` points at another file, `SP_API` overrides the base URL. A rejected or missing token exits 5 with the path to fix
 

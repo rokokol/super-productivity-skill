@@ -12,12 +12,12 @@ Run `sp.sh help` before using an unfamiliar command or flag. Do not guess the in
 
 ## Session setup
 
-The Local REST API requires the bearer token from **Settings → Misc → Access Token**. `sp.sh` reads `$SP_TOKEN`, then `secrets/token` in the private directory that `sp.sh home` prints: the skill's own directory when it already holds `secrets/` or `user/` — a clone synced between machines — and `$XDG_CONFIG_HOME/super-productivity-skill` otherwise, since a plugin or `npx skills` update replaces the skill's directory whole
+The Local REST API requires the bearer token from **Settings → Misc → Access Token**. `sp.sh` reads `$SP_TOKEN`, then the file `sp.sh token-file` prints. That file belongs to the machine and never to a synced clone of the skill, because each app issues its own token
 
 The token never passes through the agent. Ask the user to run this in their own terminal, with the resolved path of `sp.sh` in place of `SP`. It reads the token without echoing it, so the value lands in neither a command line nor a transcript:
 
 ```bash
-read -rs t && [ -n "$t" ] && d=$(SP home)/secrets && mkdir -p "$d" && chmod 700 "$d" && (umask 077 && printf '%s\n' "$t" >"$d/token") && unset t
+read -rs t && [ -n "$t" ] && f=$(SP token-file) && mkdir -p "${f%/*}" && chmod 700 "${f%/*}" && (umask 077 && printf '%s\n' "$t" >"$f") && unset t
 ```
 
 Never place the token in a command line, task, note, example, or tracked file, and never ask for it in the conversation. Exit 5 means the token is missing or rejected: ask the user to run the command above with a fresh one; never retry unauthenticated

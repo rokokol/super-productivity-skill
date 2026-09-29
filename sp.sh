@@ -18,21 +18,22 @@ while [ -L "$src" ]; do
 done
 HERE=$(cd -- "$(dirname -- "$src")" && pwd -P)
 
-# The token and the private notes belong to the user, not to the install. They stay in
-# the skill directory when it already holds them — a clone synced between machines
-# carries them along — and otherwise go to the XDG config directory, because a plugin or
-# `npx skills` update replaces the skill directory whole. The layout is the same in both:
-# secrets/token and user/. The env var wins so one call can hit another instance
-# without touching the file
-if [ -z "${SP_HOME:-}" ]; then
-  if [ -e "$HERE/secrets" ] || [ -e "$HERE/user" ]; then
-    SP_HOME=$HERE
-  else
-    SP_HOME=${XDG_CONFIG_HOME:-$HOME/.config}/super-productivity-skill
-  fi
+# The token and the private notes belong to the user, not to the install, so they live in
+# the XDG config directory: a plugin or `npx skills` update replaces the skill directory
+# whole. The notes stay in the skill directory when it already holds them, because a
+# clone synced between machines carries them along. The token never does: each app
+# issues its own, so a synced token is wrong on every machine but one. An SP_HOME from
+# the environment moves both, so one call can reach another instance
+CONFIG_DIR=${XDG_CONFIG_HOME:-$HOME/.config}/super-productivity-skill
+if [ -n "${SP_HOME:-}" ]; then
+  SP_TOKEN_FILE=${SP_TOKEN_FILE:-$SP_HOME/secrets/token}
+elif [ -e "$HERE/user" ]; then
+  SP_HOME=$HERE
+else
+  SP_HOME=$CONFIG_DIR
 fi
 SP_TOKEN=${SP_TOKEN:-}
-SP_TOKEN_FILE=${SP_TOKEN_FILE:-$SP_HOME/secrets/token}
+SP_TOKEN_FILE=${SP_TOKEN_FILE:-$CONFIG_DIR/secrets/token}
 if [ -z "$SP_TOKEN" ] && [ -r "$SP_TOKEN_FILE" ]; then
   SP_TOKEN=$(tr -d '[:space:]' <"$SP_TOKEN_FILE")
 fi
@@ -54,7 +55,8 @@ usage() {
 sp.sh — Super Productivity over its Local REST API
 
   sp.sh help                         this text
-  sp.sh home                         the private directory: token and user/ notes
+  sp.sh home                         the private directory of the user/ notes
+  sp.sh token-file                   the file the token is read from
   sp.sh health                       server + renderer status, as JSON
   sp.sh current                      currently tracked task, as JSON
   sp.sh projects | sp.sh tags        id and title of every project / tag
@@ -98,9 +100,9 @@ included); --by project and --by tag show all-time spent unless --days is given,
 and then only what was spent in that window
 
 Environment: SP_API (default http://127.0.0.1:3876), SP_TOKEN, SP_HOME (default this
-script's directory when it holds secrets/ or user/, else
-$XDG_CONFIG_HOME/super-productivity-skill), SP_TOKEN_FILE (default
-SP_HOME/secrets/token), SP_TIMEOUT
+script's directory when it holds user/, else $XDG_CONFIG_HOME/super-productivity-skill),
+SP_TOKEN_FILE (default secrets/token in $XDG_CONFIG_HOME/super-productivity-skill, or
+in SP_HOME when the environment sets it), SP_TIMEOUT
 
 CLI over Super Productivity's Local REST API (Settings -> Misc -> Enable local REST API)
 The token comes from Settings -> Misc -> Access Token
@@ -570,6 +572,7 @@ done
 case "$cmd" in
   -h | --help | help) usage ;;
   home) printf '%s\n' "$SP_HOME" ;;
+  token-file) printf '%s\n' "$SP_TOKEN_FILE" ;;
   health) api GET /health | jq . ;;
   current) api GET /status | jq . ;;
   projects | tags)

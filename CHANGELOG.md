@@ -4,6 +4,16 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 Written after the fact from the repository's history, so the entries below say what each change did rather than reproducing the reasoning; the commit bodies carry that
 
+## 2026-09-29
+
+### Changed
+
+- `sp.sh` reads the token from `secrets/token` in `$XDG_CONFIG_HOME/super-productivity-skill` on every install, and a `secrets/` beside the script no longer counts. A clone synced between machines keeps its `user/` notes, and each machine keeps its own token. A token left in the clone is not read: move it to the path `sp.sh token-file` prints
+
+### Added
+
+- `sp.sh token-file` prints the file the token is read from
+
 ## 2026-09-23
 
 ### Changed

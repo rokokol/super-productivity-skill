@@ -447,17 +447,22 @@ if [ "$mode" != lint ]; then
   expect_rc 2 "an unknown long flag is still refused" sp ./sp.sh list --bogus
   expect_rc 2 "an unknown short flag is still refused" sp ./sp.sh list -x
 
-  # Where the token and the notes live: in the skill directory when it already holds them —
-  # a clone synced between machines carries them along — and otherwise in the XDG config
-  # directory, which a plugin or `npx skills` update cannot wipe the way it replaces the
-  # skill directory. Copies of sp.sh stand in for both kinds of install, so the secrets/
-  # beside the developer's own sp.sh cannot decide the result
+  # Where the token and the notes live. The notes stay in the skill directory when it
+  # already holds them — a clone synced between machines carries them along — and
+  # otherwise go to the XDG config directory, which a plugin or `npx skills` update cannot
+  # wipe the way it replaces the skill directory. The token is always the machine's own,
+  # in the XDG directory: each app issues its own, so a synced token is wrong on every
+  # machine but one. A secrets/ left in the synced clone must not win. Copies of sp.sh
+  # stand in for both kinds of install, so the files beside the developer's own sp.sh
+  # cannot decide the result
   cfg="$fake/config"
-  mkdir -p "$cfg/super-productivity-skill/secrets" "$fake/synced/secrets" "$fake/fresh"
+  mkdir -p "$cfg/super-productivity-skill/secrets" "$fake/synced/secrets" "$fake/synced/user" \
+    "$fake/fresh" "$fake/only-secrets/secrets"
   printf 'config-token\n' >"$cfg/super-productivity-skill/secrets/token"
   printf 'synced-token\n' >"$fake/synced/secrets/token"
   cp sp.sh "$fake/synced/"
   cp sp.sh "$fake/fresh/"
+  cp sp.sh "$fake/only-secrets/"
   ln -s "$fake/synced/sp.sh" "$fake/linked-sp.sh"
   synced_dir=$(cd "$fake/synced" && pwd -P)
   sent_token() { # sent_token SCRIPT [VAR=value...] — the bearer token SCRIPT sends, if any
@@ -468,18 +473,25 @@ if [ "$mode" != lint ]; then
       FAKE_SP="$fake/api" "$@" "$script" health >/dev/null 2>&1 || true
     cat "$fake/api/auth" 2>/dev/null || true
   }
-  [ "$(sent_token "$fake/synced/sp.sh" XDG_CONFIG_HOME="$cfg")" = synced-token ] ||
-    problem "a skill directory that holds its token lost it to the XDG one"
+  [ "$(sent_token "$fake/synced/sp.sh" XDG_CONFIG_HOME="$cfg")" = config-token ] ||
+    problem "a token in the synced skill directory beat the machine's own"
   [ "$(sent_token "$fake/fresh/sp.sh" XDG_CONFIG_HOME="$cfg")" = config-token ] ||
     problem "an install with nothing beside it did not read the token from the XDG directory"
-  [ "$(sent_token "$fake/linked-sp.sh" XDG_CONFIG_HOME="$cfg")" = synced-token ] ||
-    problem "sp.sh called through a symlink did not find the directory it lives in"
   [ "$(sent_token "$fake/fresh/sp.sh" SP_HOME="$fake/synced")" = synced-token ] ||
-    problem "SP_HOME did not move the private directory"
+    problem "SP_HOME did not move the token with the private directory"
   expect_out "home is the XDG directory for an install with nothing beside it" \
     "^$cfg/super-productivity-skill\$" env -u SP_HOME XDG_CONFIG_HOME="$cfg" "$fake/fresh/sp.sh" home
-  expect_out "home is the skill directory once it holds secrets/" \
+  expect_out "home is the skill directory once it holds user/" \
     "^$synced_dir\$" env -u SP_HOME XDG_CONFIG_HOME="$cfg" "$fake/synced/sp.sh" home
+  expect_out "a secrets/ alone does not make the skill directory home" \
+    "^$cfg/super-productivity-skill\$" env -u SP_HOME XDG_CONFIG_HOME="$cfg" "$fake/only-secrets/sp.sh" home
+  expect_out "sp.sh called through a symlink finds the directory it lives in" \
+    "^$synced_dir\$" env -u SP_HOME XDG_CONFIG_HOME="$cfg" "$fake/linked-sp.sh" home
+  expect_out "token-file is the machine's XDG token for a synced clone" \
+    "^$cfg/super-productivity-skill/secrets/token\$" \
+    env -u SP_HOME -u SP_TOKEN_FILE XDG_CONFIG_HOME="$cfg" "$fake/synced/sp.sh" token-file
+  expect_out "token-file follows SP_TOKEN_FILE" \
+    "^$fake/elsewhere\$" env SP_TOKEN_FILE="$fake/elsewhere" "$fake/synced/sp.sh" token-file
 
   # Dates on both kinds of date: GNU's, and BSD's as macOS ships it, played by a fake that
   # refuses -d and --version and translates -v and -j -f. Each kind owes the same answers

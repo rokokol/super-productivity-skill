@@ -35,11 +35,46 @@ EOF
 defect 'home/synced' 'sp.sh' \
   "$(
     cat <<'EOF'
-  if [ -e "$HERE/secrets" ] || [ -e "$HERE/user" ]; then
+elif [ -e "$HERE/user" ]; then
 EOF
   )" \
-  '  if false; then' \
-  'a clone synced between machines loses its token and notes to an empty XDG directory'
+  'elif false; then' \
+  'a clone synced between machines loses its notes to an empty XDG directory'
+
+defect 'home/secrets-counts' 'sp.sh' \
+  "$(
+    cat <<'EOF'
+elif [ -e "$HERE/user" ]; then
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+elif [ -e "$HERE/secrets" ] || [ -e "$HERE/user" ]; then
+EOF
+  )" \
+  'a secrets/ left in the skill directory makes it home again'
+
+defect 'token/synced' 'sp.sh' \
+  "$(
+    cat <<'EOF'
+SP_TOKEN_FILE=${SP_TOKEN_FILE:-$CONFIG_DIR/secrets/token}
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+SP_TOKEN_FILE=${SP_TOKEN_FILE:-$SP_HOME/secrets/token}
+EOF
+  )" \
+  'a synced clone sends its synced token instead of the machine'"'"'s own'
+
+defect 'token/sp-home' 'sp.sh' \
+  "$(
+    cat <<'EOF'
+  SP_TOKEN_FILE=${SP_TOKEN_FILE:-$SP_HOME/secrets/token}
+EOF
+  )" \
+  '  :' \
+  'an SP_HOME from the environment moves the notes but not the token'
 
 defect 'home/symlink' 'sp.sh' \
   "$(
@@ -48,7 +83,7 @@ while [ -L "$src" ]; do
 EOF
   )" \
   'while false; do' \
-  'sp.sh called through a symlink looks for its token beside the link and finds none'
+  'sp.sh called through a symlink looks for its notes beside the link and finds none'
 
 # Exit codes: each tells the agent what to do next, so a wrong one sends it the wrong way
 defect 'exit/jq-internal' 'sp.sh' \
