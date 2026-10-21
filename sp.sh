@@ -87,6 +87,9 @@ Options for add / set:
   --parent <id>          (add only) create as a subtask; excludes --project and --tag
   --done | --undone      (set only)
 
+add without --project puts the task in Inbox, without --tag gives it no tags, and
+without --due or --at gives it no date, whatever view the app has open
+
 --json prints the raw API payload instead of the one-line format, for list, get,
 add, set, done, projects and tags; health and current print JSON anyway
 
@@ -586,9 +589,18 @@ case "$cmd" in
     [ ${#POS[@]} -ge 1 ] || die $E_USAGE "add needs a title"
     OPT_TITLE=${POS[0]}
     build_body
-    if [ -n "$OPT_TAG" ]; then
-      tag_ids=$(resolve_list tags "$OPT_TAG") || exit $?
+    # The app fills every field a POST leaves out from the view open in its window: Today
+    # dates the task, a tag view tags it, a project view moves it there. So each one is sent,
+    # empty when no flag names it. A subtask takes its project and tags from the parent, and
+    # the app refuses a subtask body that names them
+    [ -z "$OPT_DUE" ] && [ -z "$OPT_AT" ] && body_set dueDay null
+    if [ -z "$OPT_PARENT" ]; then
+      tag_ids='[]'
+      if [ -n "$OPT_TAG" ]; then
+        tag_ids=$(resolve_list tags "$OPT_TAG") || exit $?
+      fi
       body_set tagIds "$tag_ids"
+      [ -n "$OPT_PROJECT" ] || body_set projectId '"INBOX_PROJECT"'
     fi
     created=$(api POST /tasks "$BODY") || exit $?
     id=$(jq -er '.id | select(type == "string" and length > 0)' <<<"$created") ||

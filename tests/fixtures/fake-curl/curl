@@ -22,6 +22,12 @@
 # task from the active list too, as an app ignoring source would, and
 # FAKE_SP_ARCHIVE_SWALLOWS=1 drops the task from both lists, as a request that reaches
 # neither would leave it
+#
+# The app builds a new task from the work context open in its window, not from the request
+# alone (createNewTaskWithDefaults in src/app/features/tasks/task.service.ts, v19.1.0).
+# FAKE_SP_CONTEXT reproduces that for a top-level POST: TODAY gives a body with no dueDay
+# key today's date, tag:ID gives a body with no tagIds that tag, project:ID gives a body
+# with no projectId that project
 set -euo pipefail
 
 [ -z "${FAKE_CURL_EXIT:-}" ] || exit "$FAKE_CURL_EXIT"
@@ -151,7 +157,20 @@ case "$method $route" in
     fi
     ;;
   "POST /tasks")
-    created=$(jq -c --arg id "new-$(jq 'length + 1' "$FAKE_SP/tasks.json")" '{id: $id} + .' <<<"$(stored_body)")
+    # a subtask inherits both from its parent, and the app refuses a body that names them
+    if jq -e 'has("parentId") and (has("projectId") or has("tagIds"))' <<<"$body" >/dev/null; then
+      reply 400 '{"ok":false,"error":{"code":"UNSUPPORTED_FIELD","message":"inherited from the parent"}}'
+      exit 0
+    fi
+    context=${FAKE_SP_CONTEXT:-}
+    created=$(jq -c --arg id "new-$(jq 'length + 1' "$FAKE_SP/tasks.json")" --arg context "$context" \
+      --arg today "$(date +%F)" '
+      (if has("parentId") then {}
+       elif $context == "TODAY" and (has("dueDay") or has("dueWithTime") | not) then {dueDay: $today}
+       elif ($context | startswith("tag:")) then {tagIds: [$context | ltrimstr("tag:")]}
+       elif ($context | startswith("project:")) then {projectId: ($context | ltrimstr("project:"))}
+       else {} end) as $defaults |
+      {id: $id} + $defaults + .' <<<"$(stored_body)")
     store_task "$created"
     jq -c --argjson saved "$created" '$saved + .' <<<"$body" | ok
     ;;

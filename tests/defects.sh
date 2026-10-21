@@ -369,6 +369,50 @@ defect 'set/tag-remove' 'sp.sh' \
   "'. + \$a | unique'" \
   '--tag -name leaves the tag on the task'
 
+# What add leaves out, the app fills from the view open in its window
+defect 'add/no-due' 'sp.sh' \
+  "$(
+    cat <<'EOF'
+    [ -z "$OPT_DUE" ] && [ -z "$OPT_AT" ] && body_set dueDay null
+EOF
+  )" \
+  '    true' \
+  'a task added without --due while Today is open in the app is scheduled for today'
+
+defect 'add/no-tags' 'sp.sh' \
+  "$(
+    cat <<'EOF'
+      body_set tagIds "$tag_ids"
+      [ -n "$OPT_PROJECT" ] || body_set projectId '"INBOX_PROJECT"'
+EOF
+  )" \
+  "      [ -n \"\$OPT_PROJECT\" ] || body_set projectId '\"INBOX_PROJECT\"'" \
+  'a task added without --tag while a tag is open in the app gets that tag'
+
+defect 'add/inbox' 'sp.sh' \
+  "$(
+    cat <<'EOF'
+      [ -n "$OPT_PROJECT" ] || body_set projectId '"INBOX_PROJECT"'
+EOF
+  )" \
+  '      true' \
+  'a task added without --project while a project is open in the app goes to that project'
+
+defect 'add/subtask-inherits' 'sp.sh' \
+  "$(
+    cat <<'EOF'
+    if [ -z "$OPT_PARENT" ]; then
+      tag_ids='[]'
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+    if true; then
+      tag_ids='[]'
+EOF
+  )" \
+  'add --parent names a project and tags, which the app refuses for a subtask'
+
 # Values: a bad one is refused, a good one is sent as meant
 defect 'due/relative' 'sp.sh' \
   "$(

@@ -4,6 +4,12 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 Written after the fact from the repository's history, so the entries below say what each change did rather than reproducing the reasoning; the commit bodies carry that
 
+## 2026-10-22
+
+### Fixed
+
+- `sp.sh add` no longer takes a date, a tag or a project from the view the app has open. The app fills each field a request leaves out from that view, so a task added while Today was on screen came back scheduled for today. Without `--due` or `--at` the task has no date, without `--tag` no tags, and without `--project` it goes to Inbox
+
 ## 2026-09-29
 
 ### Changed

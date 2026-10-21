@@ -376,6 +376,17 @@ if [ "$mode" != lint ]; then
   sp ./sp.sh add verified >/dev/null 2>&1 || problem "add failed while verifying a persisted task"
   created_id=$(tail -n +"$((before + 1))" "$fake/api/requests" | grep '^GET /tasks/' | tail -n1 | cut -d' ' -f2)
   [ -n "$created_id" ] || problem "add did not read the new task back after POST"
+  # The app fills what a POST leaves out from the view open in its window, so a task added
+  # while Today, a tag or a project is on screen came back dated, tagged or moved
+  for context in TODAY tag:t-home project:p-notes; do
+    plain=$(sp FAKE_SP_CONTEXT="$context" ./sp.sh add plain --json 2>&1) ||
+      problem "add with the $context view open failed: $plain"
+    jq -e '(.dueDay // null) == null and (.tagIds // []) == [] and .projectId == "INBOX_PROJECT"' \
+      <<<"$plain" >/dev/null 2>&1 || problem "add with the $context view open took from it: $plain"
+  done
+  dated=$(sp FAKE_SP_CONTEXT=TODAY ./sp.sh add dated --due tomorrow --json | jq -r '.dueDay')
+  [ "$dated" = "$(day_offset 1)" ] || problem "add --due tomorrow with the Today view open sent $dated"
+  expect_rc 0 "add --parent with a tag view open" sp FAKE_SP_CONTEXT=tag:t-home ./sp.sh add sub --parent parent
 
   expect_rc 0 "archive verifies the task reached the archived list" sp ./sp.sh archive t1
   expect_rc 7 "restore detects a task left archived after an optimistic response" \
