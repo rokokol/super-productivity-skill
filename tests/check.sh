@@ -433,12 +433,17 @@ if [ "$mode" != lint ]; then
   expect_rc 5 "a rejected token" \
     sp FAKE_SP_REPLY='401 {"ok":false,"error":{"code":"UNAUTHORIZED","message":"invalid token"}}' ./sp.sh health
   # A reply that is not JSON exits as an API error either way; what the guard adds is saying
-  # what came back instead of relaying jq's parse error
-  nonjson_rc=0
-  nonjson_out=$(sp FAKE_SP_REPLY='502 <html>bad gateway</html>' ./sp.sh health 2>&1) || nonjson_rc=$?
-  [ "$nonjson_rc" = 4 ] || problem "a reply that is not JSON: exited $nonjson_rc, want 4"
-  grep -qxF 'HTTP 502: unexpected non-JSON response' <<<"$nonjson_out" ||
-    problem "a reply that is not JSON was not named as such: $nonjson_out"
+  # which request got it and why jq refused it. The second reply is JSON as JavaScript
+  # writes it, with a lone surrogate escaped, which jq 1.8 refuses: only jq's own reason
+  # tells the two apart
+  for reply in '502 <html>bad gateway</html>' '200 {"ok":true,"data":"\ud800"}'; do
+    nonjson_rc=0
+    nonjson_out=$(sp FAKE_SP_REPLY="$reply" ./sp.sh health 2>&1) || nonjson_rc=$?
+    [ "$nonjson_rc" = 4 ] || problem "the reply $reply: exited $nonjson_rc, want 4"
+    for fact in "HTTP ${reply%% *}" 'non-JSON' 'GET /health' 'parse error'; do
+      grep -qF -- "$fact" <<<"$nonjson_out" || problem "the reply $reply did not say \"$fact\": $nonjson_out"
+    done
+  done
   expect_rc 4 "a task the API does not have" sp ./sp.sh get no-such-task
 
   expect_out "projects --json prints the payload" '"title": "Notes"' sp ./sp.sh projects --json

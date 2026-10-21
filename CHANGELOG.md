@@ -10,6 +10,10 @@ Written after the fact from the repository's history, so the entries below say w
 
 - `sp.sh add` no longer takes a date, a tag or a project from the view the app has open. The app fills each field a request leaves out from that view, so a task added while Today was on screen came back scheduled for today. Without `--due` or `--at` the task has no date, without `--tag` no tags, and without `--project` it goes to Inbox
 
+### Changed
+
+- When the API sends a reply that jq cannot parse, `sp.sh` names the request, the size of the reply and jq's own reason. jq 1.8 refuses some JSON that the app can write, such as an escaped lone surrogate, and the old message `unexpected non-JSON response` did not show that
+
 ## 2026-09-29
 
 ### Changed

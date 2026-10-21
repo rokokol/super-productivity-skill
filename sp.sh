@@ -172,7 +172,7 @@ def line($p; $t):
 '
 
 api() {
-  local method=$1 path=$2 body=${3:-} out rc=0 code json
+  local method=$1 path=$2 body=${3:-} out rc=0 code json why
   local -a args=(-sS --max-time "$SP_TIMEOUT" -X "$method" -H 'Content-Type: application/json' -w $'\n%{http_code}')
   [ -n "$SP_TOKEN" ] && args+=(-H "Authorization: Bearer $SP_TOKEN")
   [ -n "$body" ] && args+=(--data-binary "$body")
@@ -188,10 +188,13 @@ start the desktop app and enable Settings -> Misc -> Enable local REST API" ;;
 
   code=${out##*$'\n'}
   json=${out%$'\n'*}
-  # the real jq: a parse failure here is the diagnosis, not an internal error
-  # The herestring comes first: tree-sitter rejects one placed after another redirect
-  if [ -z "$json" ] || ! command jq -e . <<<"$json" >/dev/null 2>&1; then
-    die $E_API "HTTP $code: unexpected non-JSON response"
+  # the real jq: a parse failure here is the diagnosis, not an internal error. Its reason
+  # is the evidence: JSON as JavaScript writes it can still fail jq 1.8, which refuses an
+  # escaped lone surrogate. The herestring comes first: tree-sitter rejects one placed
+  # after another redirect
+  [ -n "$json" ] || die $E_API "HTTP $code: unexpected non-JSON response to $method $path: an empty body"
+  if ! why=$(command jq -e . <<<"$json" 2>&1 >/dev/null); then
+    die $E_API "HTTP $code: unexpected non-JSON response to $method $path (${#json} characters): $why"
   fi
   if [ "$(jq -r '.ok' <<<"$json")" != "true" ]; then
     if [ "$code" = 401 ]; then
