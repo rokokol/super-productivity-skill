@@ -4,6 +4,12 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 Written after the fact from the repository's history, so the entries below say what each change did rather than reproducing the reasoning; the commit bodies carry that
 
+## 2026-10-27
+
+### Fixed
+
+- `sp.sh` works with large replies inside a nix develop shell. That shell exports `out`, and a local of the same name in `sp.sh` kept the export, so every reply over 128 KiB, such as the archive that `archive`, `restore` and `list --source archived` read, rode in the environment of `jq` and failed with "Argument list too long"
+
 ## 2026-10-22
 
 ### Fixed

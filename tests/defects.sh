@@ -95,6 +95,11 @@ EOF
   '    2 | 3 | 5) ;;' \
   "a payload of the wrong shape exits 5, and the agent asks the user for a fresh token that was never the problem"
 
+defect 'api/exported-reply' 'sp.sh' \
+  '  local +x out json' \
+  '  local out json' \
+  'inside a nix develop shell, which exports out, every reply over 128 KiB, such as the archive, fails with E2BIG as a reply that is not JSON'
+
 defect 'exit/bad-url' 'sp.sh' \
   "$(
     cat <<'EOF'

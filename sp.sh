@@ -172,7 +172,11 @@ def line($p; $t):
 '
 
 api() {
-  local method=$1 path=$2 body=${3:-} out rc=0 code json why
+  local method=$1 path=$2 body=${3:-} rc=0 code why
+  # A local keeps the export flag of an exported global of the same name, and nix develop
+  # exports out. A reply in the environment of every child is refused with E2BIG once it
+  # passes 128 KiB, so the two that hold one are never exported
+  local +x out json
   local -a args=(-sS --max-time "$SP_TIMEOUT" -X "$method" -H 'Content-Type: application/json' -w $'\n%{http_code}')
   [ -n "$SP_TOKEN" ] && args+=(-H "Authorization: Bearer $SP_TOKEN")
   [ -n "$body" ] && args+=(--data-binary "$body")

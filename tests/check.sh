@@ -351,6 +351,15 @@ if [ "$mode" != lint ]; then
   [[ $(last_list) == *tagId=TODAY* ]] || problem "list --today did not ask for today's tasks: $(last_list)"
   sp ./sp.sh list --query 'a b&c' >/dev/null
   [[ $(last_list) == *query=a%20b%26c* ]] || problem "list --query sent the text unencoded: $(last_list)"
+  # A function's local keeps the export flag of an exported global of the same name, and
+  # nix develop exports out. A reply held in such a local then rides in every child's
+  # environment, where Linux refuses one string over 128 KiB with E2BIG
+  mkdir -p "$fake/large"
+  cp "$fake/api"/*.json "$fake/large/"
+  printf '%0150000d' 0 >"$fake/large/notes"
+  jq --rawfile n "$fake/large/notes" '.[0].notes = $n' "$fake/api/tasks.json" >"$fake/large/tasks.json"
+  expect_out "a reply over 128 KiB with out exported" 'Water plants' \
+    sp FAKE_SP="$fake/large" out=/nix/store/out ./sp.sh list --all
   # Refused before anything is sent: each would otherwise reach the API as something else
   expect_rc 2 "TODAY given as a tag" sp ./sp.sh add dated --tag TODAY
   expect_rc 2 "a subtask with a project of its own" sp ./sp.sh add sub --parent parent --project Notes
